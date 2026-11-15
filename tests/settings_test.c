@@ -44,7 +44,8 @@ int main(void)
     {   /* (Skiff, R1) THEME: SKIFF HI-CON PAPER CRYPT NEON QUARK. Every old id maps to one (the eleven before THEME: PAL_TAG +
          * index; Felucca's twenty: below 20; a palette gone: SKIFF); THEME's ids round trip; anything else is SKIFF */
         persist_t q = original;
-        assert(NPALETTES == 6u && !strcmp(UI_PALETTES[0].name, "SKIFF") && !strcmp(UI_PALETTES[1].name, "HI-CON") &&
+        assert(NPALETTES == 9u && !strcmp(UI_PALETTES[6].name, "TAPE") && !strcmp(UI_PALETTES[8].name, "CANDY") &&   /* (OP DREAM) */
+               !strcmp(UI_PALETTES[0].name, "SKIFF") && !strcmp(UI_PALETTES[1].name, "HI-CON") &&
                !strcmp(UI_PALETTES[2].name, "PAPER") && !strcmp(UI_PALETTES[UI_CRYPT_INDEX].name, "CRYPT"));
         for (uint32_t i = 0; i < 20u; i++) assert(palette_from_stored(i) < NPALETTES);
         assert(palette_from_stored(13) == 2u && palette_from_stored(11) == 1u && palette_from_stored(19) == 1u &&
