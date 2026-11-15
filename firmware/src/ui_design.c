@@ -466,9 +466,11 @@ static uint32_t design_sig(void)
 /* a dial: a ring open at the bottom (270 degrees), lit from a0 to a1 (/ 1000 of the way round), a hand at a1 */
 static void dial_pt(int32_t cx, int32_t cy, int32_t r, int32_t a, int32_t *x, int32_t *y)
 {
-    uint32_t th = 0xA0000000u - (uint32_t)a * 3221225u;   /* 225 degrees, clockwise */
-    *x = cx + ((sine_i(th + 0x40000000u) * r + 16384) >> 15);
-    *y = cy - ((sine_i(th) * r + 16384) >> 15);
+    /* 225 degrees, clockwise. The angle is counted upwards and the circle mirrored: counted downwards, the step is
+     * a negative number that build.py's check takes for an address in the chip's ROM (0xFFCxxxxx) */
+    uint32_t ph = (uint32_t)a * 3221225u;
+    *x = cx + ((sine_i(ph + 0xA0000000u) * r + 16384) >> 15);
+    *y = cy - ((-sine_i(ph + 0x60000000u) * r + 16384) >> 15);
 }
 static void dial(int32_t cx, int32_t cy, int32_t a0, int32_t a1, uint16_t lit, uint16_t hand)
 {
