@@ -1264,7 +1264,29 @@ static void draw_columns(void)
 #define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-static const char *const SPLASH_LINES[] = {"Skiff", FELUCCA_VERSION, "on Felucca 1.1.5", "H\xFCgelton + community"};
+/* (OP DREAM) this build's own name on the splash, large, alone in the top band (AF_L: its capitals' top SPL_PAD
+ * down); the bottom band says which build it is, what it is built on and whose that is */
+#define OPD_BUILD "5"
+static const char *const SPLASH_LINES[] = {"OP DREAM", "build " OPD_BUILD " on Skiff 2.6", "illuminus5 + H\xFCgelton"};
+/* a reel: its rim, the tape wound on it (radius rp), three spokes turned by rot (a turn 2^32), the hub */
+static void spl_reel(int32_t cx, int32_t cy, int32_t r, int32_t rp, uint32_t rot, uint16_t hub)
+{
+    uint32_t k;
+    qk_disc(cx, cy, r, T_MID);
+    qk_disc(cx, cy, r - 1, T_RAISE);
+    qk_disc(cx, cy, rp, ux_mix(T_RAISE, T_TEXT, 45));
+    for (k = 0; k < 3u; k++) {
+        uint32_t ph = rot + k * 0x55555555u;
+        cv_line(cx, cy, cx + (r - 2) * QK_COS(ph) / 32767, cy + (r - 2) * QK_SIN(ph) / 32767, T_RAISE);
+    }
+    qk_disc(cx, cy, 5, hub);
+    cv_rect(cx - 1, cy - 1, 2, 2, T_RAISE);
+}
+static void spl_star(int32_t x, int32_t y, uint16_t c)
+{
+    cv_rect(x - 1, y, 3, 1, c);
+    cv_rect(x, y - 1, 1, 3, c);
+}
 /* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
  * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
 static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
@@ -1278,13 +1300,14 @@ static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l
 }
 static void draw_splash(void)
 {
-    int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* a band: its two lines, the descenders in */
+    int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* the bottom band: its two lines, the descenders in */
     int32_t lb = h - SPL_PAD - AF_M_CAP_H - AF_M_CAP_Y;         /* the bottom band's last line: its top */
     lcd_fill(0, 0, 240, 240, T_BG);
     lcd_fill(SPL_X0, SPL_X0, SPL_SQ, SPL_SQ, T_RAISE);
-    splash_band(SPL_X0, (uint32_t)h, SPL_PAD - AF_M_CAP_Y, SPLASH_LINES, AL_V, SPL_PAD,
-                SPL_PAD + SPL_PITCH + AF_M_CAP_H, "splash name + version SPL_PAD from the top");
-    splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 2, AL_B, 0, h - SPL_PAD,
+    cv_begin(SPL_SQ, (uint32_t)(SPL_PAD - AF_L_CAP_Y + AF_L.h), T_RAISE);   /* (OP DREAM) the name, alone */
+    cv_text_on(SPL_PAD, SPL_PAD - AF_L_CAP_Y, &AF_L, SPLASH_LINES[0], T_THEME, T_RAISE);
+    cv_blit(SPL_X0, SPL_X0);
+    splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 1, AL_B, 0, h - SPL_PAD,
                 "splash maker's baseline SPL_PAD from the bottom");
     if (ux.crypt) {   /* (Skiff) CRYPT: a skull between two torches, between the bands (design/mock_crypt.py splash) */
         cv_begin(SPL_SQ, 40, T_RAISE);
@@ -1323,11 +1346,22 @@ static void draw_splash(void)
         ne_palm(SPL_SQ - SPL_PAD - 22, 9, T_BG);
         ne_car(SPL_SQ / 2 + 14, 30, SPR_CAR, 1, T_THEME, 30, T_BG);
         cv_blit(SPL_X0, 98);
-    } else {   /* Skiff: the tracks' colours, a block each, between the bands (centred: 18 px in from each side; (phase 6)
-         * six: 20 px, 24 apart, design/mock_p6.py splash) */
+    } else {   /* (OP DREAM) a tape asleep, between the bands: two reels, the tape from one to the other with the six
+         * tracks' colours on it, over them a crescent moon and its stars */
         uint32_t k;
+        cv_begin(SPL_SQ, 72, T_RAISE);
+        spl_reel(SPL_PAD + 24, 42, 22, 17, 0x10000000u, T_THEME);
+        spl_reel(SPL_SQ - SPL_PAD - 24, 42, 22, 10, 0x38000000u, T_ACCENT);
+        cv_rect(SPL_PAD + 24, 65, SPL_SQ - 2 * SPL_PAD - 48, 1, T_MID);
         for (k = 0; k < NTRK; k++)
-            lcd_fill(SPL_X0 + 18u + k * 24u, 108, 20, 20, T_TRK(k));
+            cv_rect(65 + (int32_t)k * 8, 59, 6, 4, T_TRK(k));
+        qk_disc(SPL_SQ / 2, 16, 10, T_THEME);                 /* the moon: a disc, a bite out of it */
+        qk_disc(SPL_SQ / 2 + 5, 13, 9, T_RAISE);
+        spl_star(SPL_SQ / 2 - 25, 10, T_ACCENT);
+        spl_star(SPL_SQ / 2 + 25, 7, T_TEXT);
+        cv_rect(SPL_SQ / 2 + 32, 24, 1, 1, T_ACCENT);
+        cv_rect(SPL_SQ / 2 - 18, 26, 1, 1, T_TEXT);
+        cv_blit(SPL_X0, 80);
     }
     lcd_sync();
 }
