@@ -143,6 +143,11 @@ static void ui_power_on(void)
     memset(fol_map, 0, sizeof fol_map);
     memset(&mn, 0, sizeof mn);                    /* ((2.2) .bss at power-on: no note out, nothing owed) */
     memset(&fr, 0, sizeof fr);                    /* ((2.5) .. no FREE TAKE's picker open) */
+    tape_reset();                                 /* ((TAPE) .. an empty tape) */
+    design_trk = 0;                               /* (the new layout's designer: nothing designed, no trial) */
+    memset(&ds, 0, sizeof ds);
+    tape.to_pat = 1;                              /* (.. REC TO STEPS: Skiff's own recording, as these tests know it;
+                                                   * the tape's own: tape_test.c) */
     free_hold = 0;
     memset(&ui, 0, sizeof ui);
     memset(&nsel, 0, sizeof nsel);                /* ((Skiff 2.0) no selection, FEEL's tiles on CHANCE) */
@@ -523,10 +528,10 @@ static int test_sound_loads(void)
                      str_eq(sd->names[1], "PIANO") && enum_step(sd, 0, 1) == 2 && enum_step(sd, 2, 1) == 0 &&
                      enum_step(sd, 1, 2) == 2 && enum_orig(sd, 1) == 0 && enum_orig(sd, 5) == 5 &&
                      enum_orig(&ENGINES[8]->edit[0], 1) == 0);
-        bad += check("SAMPLE / GRAIN SET 4 (PERC, retired): a PIANO alias, knobs skip it, USR1..3 stay 5..7",
+        bad += check("SAMPLE / GRAIN SET 4 (PERC, retired): a PIANO alias, knobs skip it, USR1..2 stay 5..6 ((TAPE) USR3's flash keeps the tapes)",
                      str_eq(sd->names[SMP_SET_PERC], "PIANO") && enum_orig(sd, SMP_SET_PERC) == 0 &&
                      enum_step(sd, 3, 4) == 5 && enum_step(sd, 5, 4) == 3 && str_eq(sd->names[5], "USR1") &&
-                     str_eq(sd->names[7], "USR3") && sd->max == 7 &&
+                     str_eq(sd->names[6], "USR2") && sd->max == 6 &&
                      enum_orig(&ENGINES[8]->edit[0], SMP_SET_PERC) == 0 && SMP_SETS[SMP_SET_PERC].z0 == SMP_SETS[0].z0);
     }
 #if FELUCCA_LEGACY                             /* ((2.0) the converter's: 2.0 reads no record of before) */
@@ -1517,14 +1522,19 @@ static int test_display_preferences(void)
     bad += check("THEME OCT+ previews the next palette (PAPER, light) without closing the menu",
                  settings.palette == 2 && T_BG == UI_PALETTES[2].bg && ux.light && ui.menu == 1 && !song.octave &&
                  memcmp(before, host_screen, sizeof before) && !memcmp(sounds, trk, sizeof sounds));
-    bad += check("THEME KNOB 1 steps on to CRYPT, NEON (both the pixel faces), QUARK (Barlow), then wraps to SKIFF (R1: "
-                 "SKIFF HI-CON PAPER CRYPT NEON QUARK)",
+    bad += check("THEME KNOB 1 steps on to CRYPT, NEON (both the pixel faces), QUARK (Barlow), (TAPE build) TAPE PEA CANDY "
+                 "(colours only), then wraps to SKIFF (R1: SKIFF HI-CON PAPER CRYPT NEON QUARK)",
                  str_eq(MI_NAME[MI_COLOR], "THEME") && (turn(EN_K1, 1), settings.palette == UI_CRYPT_INDEX) && ux.crypt &&
                  str_eq(UI_PALETTES[UI_CRYPT_INDEX].name, "CRYPT") && &AF_S == &AF_S_PX &&
                  (turn(EN_K1, 1), settings.palette == UI_NEON_INDEX) && ux.neon && !ux.crypt && &AF_S == &AF_S_PX &&
                  str_eq(UI_PALETTES[UI_NEON_INDEX].name, "NEON") &&
                  (turn(EN_K1, 1), settings.palette == UI_QUARK_INDEX) && ux.quark && !ux.neon && &AF_S != &AF_S_PX &&
                  str_eq(UI_PALETTES[UI_QUARK_INDEX].name, "QUARK") &&
+                 (turn(EN_K1, 1), settings.palette == UI_QUARK_INDEX + 1u) && !ux.quark && !ux.light &&
+                 str_eq(UI_PALETTES[settings.palette].name, "TAPE") && &AF_S != &AF_S_PX &&
+                 (turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "PEA")) && !ux.light &&
+                 (turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "CANDY")) && ux.light && !ux.crypt &&
+                 settings.palette == NPALETTES - 1u &&
                  (turn(EN_K1, 1), settings.palette == UI_SKIFF_INDEX) && !ux.quark && !ux.crypt && !ux.neon && &AF_S != &AF_S_PX &&
                  str_eq(UI_PALETTES[UI_SKIFF_INDEX].name, "SKIFF"));
     settings.lowcut = 2;
@@ -2186,7 +2196,9 @@ static int test_product_ux(void)
         if (!page_visible(i))
             continue;
         press(B_REC);
-        if (step_page(PAGES[i].graph))            /* #133: STEP (its tiles, ROLL) arms step recording, stopped */
+        if (PAGES[i].graph == GR_TAPE)            /* (TAPE) its own REC: the tape armed, the first note starts it */
+            ok &= tape_rec_on() && !song.rec && !transport_req && ui.page == i && !ui.home;
+        else if (step_page(PAGES[i].graph))       /* #133: STEP (its tiles, ROLL) arms step recording, stopped */
             ok &= song.rec == 1 && !transport_req && ui.page == i && !ui.home;
         else ok &= song.rec == 1 && transport_req == 1 && ui.page == i && !ui.home;
     }
@@ -3691,7 +3703,10 @@ static int test_quick_layers(void)
     ok = TSEL->eng_req == 2u && TSEL->preset == 0u && ui.layer == LAYER_EDIT && sync_reload && !gates();
     key_up(white(eng_rank(2))); frame();
     key_down(white(1)); key_up(white(1)); frame();
-    ok &= TSEL->eng_req == ENGI_FM6;                    /* (G3: FM6, second in ENGINE_ORDER) */
+    ok &= TSEL->eng_req == (FELUCCA_FM4 ? ENGI_FM6 : ENGI_WAVE);   /* ((WAVE) second in ENGINE_ORDER; a build with DIGITAL
+                                                        * has no WAVE: FM6) */
+    key_down(white(eng_rank(ENGI_FM6))); key_up(white(eng_rank(ENGI_FM6))); frame();
+    ok &= TSEL->eng_req == ENGI_FM6;                    /* (FM6, after it) */
     key_down(white(NENG_SHOWN - 2u)); key_up(white(NENG_SHOWN - 2u)); frame();
     ok &= TSEL->eng_req == ENGI_DRUM;                   /* (the key before the last: DRUM) */
     key_down(white(NENG_SHOWN - 1u)); key_up(white(NENG_SHOWN - 1u)); frame();
@@ -3699,7 +3714,7 @@ static int test_quick_layers(void)
     ok &= !memcmp(TSEL->step, before.step, sizeof before.step) && TSEL->p[P_SLEN] == before.p[P_SLEN] &&
           TSEL->p[P_SLCR] == SL_STUT;
     btn_up(B_EDIT); frame();
-    bad += check("EDIT + white key n: the n-th engine shown (FM6 2nd, DRUM, DRUM-X last), while playing; steps, LEN, SLICER stay", ok);
+    bad += check("EDIT + white key n: the n-th engine shown (WAVE 2nd, FM6 3rd, DRUM, DRUM-X last), while playing; steps, LEN, SLICER stay", ok);
     hold(B_SAVE);
     bad += check("  SAVE held: UNDO back to before the layer's loads, the steps untouched",
                  TSEL->eng_req == 0u && TSEL->preset == before.preset && !memcmp(TSEL->step, before.step, sizeof before.step));
@@ -4505,10 +4520,11 @@ static int test_fm4_retired(void)
         seen |= 1u << TSEL->eng_req;
     }
     bad += check("PRESETS KNOB 2: the engines in order, DIGITAL skipped, back to the first",
-                 seen == all && TSEL->eng_req == 0u && eng_step(0, 1) == ENGI_FM6 && eng_step(ENGI_FM6, 1) == 2u &&
-                 eng_step(ENGI_FM6, -1) == 0u && eng_step(0, -1) == ENGI_DRUMX && eng_step(ENGI_DRUMX, -1) == ENGI_DRUM);
+                 seen == all && TSEL->eng_req == 0u && eng_step(0, 1) == ENGI_WAVE && eng_step(ENGI_WAVE, 1) == ENGI_FM6 &&
+                 eng_step(ENGI_FM6, 1) == 2u && eng_step(ENGI_WAVE, -1) == 0u && eng_step(0, -1) == ENGI_DRUMX &&
+                 eng_step(ENGI_DRUMX, -1) == ENGI_DRUM);
     {   /* the display order (engines.c ENGINE_ORDER): every engine one can pick once; the PRESETS list follows it */
-        static const char *const ORDER[] = {"ANALOG", "FM6", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
+        static const char *const ORDER[] = {"ANALOG", "WAVE", "FM6", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
                                             "PHYS", "NOISE", "SLICE", "DRUM", "DRUM-X"};
         uint32_t last = 0xFFu, r = 0, n = 0;
         ok = NENG_SHOWN == NELEM(ORDER);
@@ -4524,7 +4540,7 @@ static int test_fm4_retired(void)
             last = e;
             r++;
         }
-        bad += check("engines shown ANALOG FM6 PHASE ... NOISE SLICE DRUM DRUM-X (ENGINE_ORDER); PRESETS lists them so",
+        bad += check("engines shown ANALOG WAVE FM6 PHASE ... NOISE SLICE DRUM DRUM-X (ENGINE_ORDER); PRESETS lists them so",
                      ok && r == NENG_SHOWN);
     }
 #if FELUCCA_LEGACY                                     /* ((2.0) the converter's: fm4_convert.c) */
@@ -5779,7 +5795,8 @@ static int test_layer_knob_race(void)
                     if (mode == 2u && LB[l] == B_EDIT && pg < NPAGES &&   /* (EDIT's tap acts there: no lock; */
                         (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || step_page(PAGES[pg].graph) ||
                          PAGES[pg].graph == GR_FEEL ||      /* (2.0) FEEL: SHIFT + EDIT deletes) */
-                         PAGES[pg].graph == GR_EVENTS || PAGES[pg].graph == GR_SONG))
+                         PAGES[pg].graph == GR_EVENTS || PAGES[pg].graph == GR_SONG ||
+                         PAGES[pg].graph == GR_TAPE))        /* ((TAPE) SHIFT + EDIT clears the track's notes) */
                         continue;
                     rc_run(LB[l], mode, k, pg, 0, &a0, &b0);
                     rc_run(LB[l], mode, k, pg, 1, &a1, &b1);
@@ -5963,8 +5980,10 @@ static int test_seq_tools(void)
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_SONG;
     press(B_SEQ); frames(320);
+    ok &= cur_page()->graph == GR_TAPE;                                 /* ((TAPE) after SONG) */
+    press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_ROLL;
-    bad += check("  a tap on NOTES: the next SEQ page ((2.0) FEEL PATTERN AUTOMATION SONG NOTES; the hint first)", ok);
+    bad += check("  a tap on NOTES: the next SEQ page ((2.0) FEEL PATTERN AUTOMATION SONG, TAPE, NOTES; the hint first)", ok);
 
     /* the whole sequence: REVERSE (a note's ties stay after it), SHIFT, CLEAR, locks, LEN, silent keys, undo */
     ui_power_on();

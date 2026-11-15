@@ -93,9 +93,9 @@ static int ed_smp_erase(uint32_t k, uint32_t all)  /* header sector, or the whol
 {
     uint32_t i, took;
     int rc = 0;
-#if BOARD_SMK37
     if (!SMP_USER_HAS(k))
-        return -8;                                 /* SMK: USR2 / USR3 have no flash */
+        return -8;                                 /* SMK: USR2 / USR3 have no flash; ((TAPE) the FM-1: USR3 keeps the tapes) */
+#if BOARD_SMK37
     st_stock_release();                            /* before the first erase in USRFLASH: storage.c */
 #endif
     usr_nz[k] = 0;
@@ -113,10 +113,8 @@ static int ed_flash_stop(void);
 static int ed_smp_end(uint32_t k, const uint8_t *a, uint32_t na)
 {
     const smp_user_hdr_t *h = (const smp_user_hdr_t *)ed_smp_buf;
-#if BOARD_SMK37
     if (!SMP_USER_HAS(k))
-        return 4;                                  /* SMK: USR2 / USR3 have no flash */
-#endif
+        return 4;                                  /* SMK: USR2 / USR3 have no flash; ((TAPE) the FM-1: USR3 keeps the tapes) */
     if (ed_unpack7(a, na, ed_smp_buf, sizeof(smp_user_hdr_t)) != sizeof(smp_user_hdr_t))
         return 1;
     if (h->magic != SMP_USER_MAGIC || h->version != 1 || !h->nz || h->nz > 16u ||

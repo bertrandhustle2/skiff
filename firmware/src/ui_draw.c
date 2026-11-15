@@ -36,8 +36,9 @@ static int32_t batt_shown(void)
 /* REC: filled, the selected track armed; outlined, another track armed */
 static void draw_rec_mark(int32_t x, uint16_t bg)
 {
-    if (song.rec)
-        cv_icon_mid(x, H_HEAD / 2, 16, (song.rec >> song.sel) & 1u ? ICON_X_REC : ICON_X_REC_O, T_REC, bg);
+    if (song.rec || tape_rec_on())                   /* ((TAPE) the tape recording: as the selected track armed) */
+        cv_icon_mid(x, H_HEAD / 2, 16, tape_rec_on() || ((song.rec >> song.sel) & 1u) ? ICON_X_REC : ICON_X_REC_O,
+                    T_REC, bg);
 }
 
 /* the battery: a 16 px Fukiai icon. The stock thresholds give 0..3 bars of 3; the font has 0..4 bars of 4:
@@ -646,6 +647,42 @@ static void draw_foot(void)
         cv_blit(0, foot_y());
         return;
     }
+    if (save2_page()) {                                /* (the new layout's SAVE pages: what OCT+ and OCT- do there) */
+        khint_t kh[2] = {{KC_OCTUP, "SAVE"}, {KC_OCTDN, "LOAD"}};
+        page_pos(ti);
+        sig = 0x5A7E2u + pg->graph * 31u + str_hash(7u, ti);
+        if (!ui.force && sig == ui.foot_sig)
+            return;
+        ui.foot_sig = sig;
+        cv_begin(240, foot_h(), T_BG);
+        if (ux.neon)
+            ne_rule(0, 1);
+        if (ux.quark)
+            qk_rule(0);
+        cv_key_row(8, 170, ly - KC_TY, kh, 2, 3u, T_BG);
+        cv_text_r(232, ly, &AF_S, ti, T_MID, T_BG);
+        cv_blit(0, foot_y());
+        return;
+    }
+    if (design_on() && !ui.home && !act_cols() && !ui.ml.on) {   /* (the new layout) a sound only tried on the track
+                                                       * (ui_design.c): what keeps it there, for the whole line */
+        char h[28] = "HOLD [EDIT] KEEP ON T0";
+        h[21] = (char)('1' + song.sel % NTRK);
+        page_pos(ti);
+        sig = 0xDE519u + song.sel * 131u + str_hash(7u, ti) + (ui.edge_t != 0) * 5501u;
+        if (!ui.force && sig == ui.foot_sig)
+            return;
+        ui.foot_sig = sig;
+        cv_begin(240, foot_h(), T_BG);
+        if (ux.neon)
+            ne_rule(0, 1);
+        if (ux.quark)
+            qk_rule(0);
+        cv_free_hint(8, ly, h, T_TEXT, T_BG, 190);
+        cv_text_r(232, ly, &AF_S, ti, T_MID, T_BG);
+        cv_blit(0, foot_y());
+        return;
+    }
     sound_name(t, pn);
     if (ui.home)
         ti[0] = 0;                                     /* ((Skiff U4, L5) the header names the page: here only where it */
@@ -685,6 +722,8 @@ static void draw_foot(void)
         sig += str_hash(0x4C45u, ln);
     }
     sig += ret * 0x2E7B5u;
+    if (home_lanes() && UI_NEW)                        /* ((TAPE) HOME's line: its two holds) */
+        sig += 0x7A9Eu;
     if (!ui.force && sig == ui.foot_sig)
         return;
     ui.foot_sig = sig;
@@ -786,6 +825,10 @@ static void draw_foot(void)
         ex = 8 + 16 + 5 + (ew < 80 ? ew : 80);        /* (where the engine's name ends) */
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         (void)need;
+        if (home_lanes() && !ui_hints_off && UI_NEW) {   /* ((TAPE) the new layout's HOME: REC held, PLAY held) */
+            int32_t hx = cv_free_hint(8, ly, "HOLD [REC] AGAIN", T_MID, T_BG, 112) + 14;
+            cv_free_hint(hx, ly, "HOLD [PLAY] LOOP", T_MID, T_BG, 230 - hx);
+        } else
         if (home_lanes() && !ui_hints_off)             /* Skiff BLOCKS on HOME: the lanes name the sounds; the hint */
 #if BOARD_SMK37
             cv_free_hint(8, ly, "HOLD [KNOB BANK] SHIFT", T_MID, T_BG, 160);   /* (SMK37_UX.md extra buttons A) */
@@ -975,6 +1018,23 @@ static void draw_columns(void)
         sheet_of(cur_page()->graph)->cards();
         return;
     }
+    if (cur_page()->graph == GR_PSAVE || cur_page()->graph == GR_SSAVE) {   /* (the new layout's SAVE pages) */
+        save2_columns();
+        return;
+    }
+    if (OLD_UI(cur_page()->graph == GR_TAPE)) {          /* (TAPE) LOOP END (ui_tape.c tape_knob): the end in seconds */
+        draw_column(0, "LOOP", tape.loop ? "ON" : "OFF", "", VR_LIVE, tape.loop ? 1000 : 0, ICON_AUTO);
+        if (tape.len && tape.len < 100u * 44100u)
+            fmt_fix(val, (int32_t)(tape.len / 441u), 2);
+        else if (tape.len)
+            fmt_fix(val, (int32_t)(tape.len / 4410u), 1);
+        else
+            str_cpy(val, "--", sizeof val);
+        draw_column(1, "END", val, tape.len ? "s" : "", tape.len ? VR_LIVE : VR_DIM, -1, ICON_AUTO);
+        draw_column(2, "", "", "", VR_THEME, -1, ICON_NONE);
+        draw_column(3, "", "", "", VR_THEME, -1, ICON_NONE);
+        return;
+    }
     if (cur_page()->graph == GR_SONG) {                  /* (Skiff phase 5) ENTRY PATTERN REPS SONG (ui_input.c song_knob):
                                                          * the selected track's entry picked; its pattern (KNOB 2's pick
                                                          * while there is one), its repeats; SONG */
@@ -1021,7 +1081,7 @@ static void draw_columns(void)
                                                          * #46) KNOB 4 the action, OCT+ does it: the footer) */
         return;
     }
-    if (cur_page()->graph == GR_USER) {                  /* SLOT, then three GO buttons */
+    if (OLD_UI(cur_page()->graph == GR_USER)) {                  /* SLOT, then three GO buttons */
         int used = up_used(ui.uslot);
         up_slot_label(val, ui.uslot);
         draw_column(0, "SLOT", val, "", VR_LIVE, (int32_t)ui.uslot * 1000 / (int32_t)(UP_SLOTS - 1u), ICON_AUTO);
@@ -1158,12 +1218,12 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* ((Skiff U2) PROJECT: NAME, was EDIT; (1.2.1, #6) DELETE, */
+        if (OLD_UI(cur_page()->graph == GR_SLOTS) && c == 1u) {   /* ((Skiff U2) PROJECT: NAME, was EDIT; (1.2.1, #6) DELETE, */
             draw_act_column(1, ui.act == 2u && ui.act2 ? "NAME" : "DELETE",   /* one step further NAME) */
                             project_used((uint32_t)song.g[G_SLOT] - 1u) ? VR_THEME : VR_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_SLOTS && c == 2u) {   /* ((2.5, the user's 3A) KNOB 3: LOAD, NEW ((1.2.1, #6) */
+        if (OLD_UI(cur_page()->graph == GR_SLOTS) && c == 2u) {   /* ((2.5, the user's 3A) KNOB 3: LOAD, NEW ((1.2.1, #6) */
             uint32_t a = proj_k3();                       /* an empty slot's first), CLEAR SONG, CLEAR TRACKS: */
             if (a >= PK3_SONG)                            /* CLEAR over what goes */
                 draw_column(2, "CLEAR", a == PK3_SONG ? "SONG" : "TRACKS", "", VR_ACCENT, -1, ICON_AUTO);
@@ -1528,7 +1588,7 @@ static void ui_draw_page(uint32_t counting)
     }
     if (!ui.home && !page_visible(ui.page)) {          /* a page the track no longer has (another track, another
                                                          * engine): (Skiff U3, N3) its family's first, or HOME, and why */
-        uint32_t f = page_vis_first(PAGES[ui.page].fam);
+        uint32_t f = page_vis_first(page_fam(&PAGES[ui.page]));
         page_none(PAGES[ui.page].title);
         if (f < NPAGES) {
             ui.page = (uint8_t)f;

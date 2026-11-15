@@ -89,7 +89,7 @@ static const char *head_title(const char *pn)
 static void draw_head_blocks(void)
 {
     const track_t *t = TSEL;
-    uint32_t rec = (song.rec >> song.sel) & 1u ? 2u : song.rec != 0u, id, sig;
+    uint32_t rec = tape_rec_on() || ((song.rec >> song.sel) & 1u) ? 2u : song.rec != 0u, id, sig;   /* ((TAPE) its REC) */
     int msg = ui.msg_t || ui.layer;
     char pos[12] = "1.1", b[8], pn[16], mk[16];      /* (stopped: PLAY starts from the top) */
     uint32_t s_k, s_at, s_n = lists.song && song.playing ? song_at(&s_k, &s_at) : 0u;   /* ((2.5, 2B) the song strip) */

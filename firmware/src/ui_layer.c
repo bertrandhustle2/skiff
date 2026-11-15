@@ -103,7 +103,8 @@ static struct {
 static int layer_allowed(void) { return !ui.menu && !ui.confirm && !ui.uboot && !name_on(); }
 static uint32_t ly_bit(uint32_t l) { return 1u << panel.btn[LAYERS[l].btn]; }
 /* a layer's button held opens it, on every page ((Skiff U2) SEQ's too); REC's never (it arms on its press: SHIFT + REC) */
-static int ly_avail(uint32_t l) { return l != LAYER_REC; }
+static int ly_avail(uint32_t l) { return l != LAYER_REC && !(UI_NEW && l == LAYER_EDIT); }   /* ((the new layout) EDIT
+                                                         * held keeps the designer's sound: ui_design.c design_hold) */
 static uint32_t ly_down(uint32_t l) { return l && ((fm1_in.buttons & ly_bit(l)) != 0u || ui.lock == l); }   /* (locked: held) */
 static uint32_t layer_bits(void)
 {
@@ -239,7 +240,8 @@ static uint32_t layer_bits_all(void)
 {
     uint32_t l, m = 0;
     for (l = LAYER_FX; l < LAYER_N; l++)
-        m |= ly_bit(l);
+        if (!(UI_NEW && l == LAYER_EDIT))               /* ((the new layout) EDIT has no layer) */
+            m |= ly_bit(l);
     return m;
 }
 
@@ -324,6 +326,9 @@ static void layer_show(void)
  * menu; MENU > HINTS OFF: never */
 static void free_hint(void)
 {
+#if FELUCCA_NEWUI                                     /* ((the new layout alone) no FREE TAKES: take.c) */
+    return;
+#else
     if ((layer_seen & 1u) || song.playing || free_n - free_n0 < 16u || ui.msg_t || ui.confirm || ui.menu || ui_hints_off)
         return;
     layer_seen |= 1u;
@@ -334,6 +339,7 @@ static void free_hint(void)
     ui_message("SHIFT + SAVE: FREE TAKE");
 #endif
     ui.msg_t = 130;                                     /* (as a layer's hint, ~2 s) */
+#endif
 }
 
 /* a tap: the button's page; the hint until its layer has been opened once (unless the tap said something; never
@@ -588,12 +594,12 @@ static void layer_key(uint32_t l, uint32_t k)
         }
     } else if (l == LAYER_SCL) {
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
-    } else if (l == LAYER_EDIT && !key_black(k)) {
+    } else if (OLD_UI(l == LAYER_EDIT) && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
             edit_load(eng_vis(p), 0);
         else if (p == LY_INIT)
             confirm_open(CF_INIT_SOUND, song.sel);      /* (the dialog closes the layer) */
-    } else if (l == LAYER_EDIT && p < NLANE && drum_track(TSEL)) {   /* ((1.3, from Felucca 1.4.1) black keys 1..8:
+    } else if (OLD_UI(l == LAYER_EDIT) && p < NLANE && drum_track(TSEL)) {   /* ((1.3, from Felucca 1.4.1) black keys 1..8:
                                                          * the lanes' MUTE, latched (eng_drum.c drum_mute) */
         drum_mute[song.sel] ^= (uint8_t)(1u << p);
         ui_say(drum_lane_name(TSEL, p), (drum_mute[song.sel] >> p) & 1u ? " MUTED" : " ON");
@@ -649,7 +655,7 @@ static void layer_knob(uint32_t k, int32_t s)
                              TP[P_LEVEL].max);
         motion_capture(t, P_LEVEL, *vp);
         ml_knob(t, P_LEVEL);                            /* ((1.3) MIDI LEARN: Tk LEVEL picked) */
-    } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
+    } else if (OLD_UI(l == LAYER_EDIT)) {               /* ENG, No., FAV */
         if (k == 0u)
             edit_load(eng_step_for(song.sel, TSEL->eng_req, s), 0);
         else if (k == 1u)
@@ -730,7 +736,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         ui.force = 1;
         mine = 0;
     }
-    if ((mine & 2u) && lys.l == LAYER_EDIT && drum_track(TSEL)) {   /* ((2.0.1, #54) OCT+: every lane on at once, as a */
+    if ((mine & 2u) && OLD_UI(lys.l == LAYER_EDIT) && drum_track(TSEL)) {   /* ((2.0.1, #54) OCT+: every lane on at once, as a */
         drum_mute[song.sel] = 0;                        /* build-up's release (the black keys mute them one by one) */
         ui_message("ALL LANES ON");
         ui.force = 1;
@@ -741,7 +747,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
             perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
             (void)mom_keep(0, 1);                       /* ((2.0) nothing of them to come back) */
             ui_message("FX ALL OFF");
-        } else if (lys.l == LAYER_EDIT) {
+        } else if (OLD_UI(lys.l == LAYER_EDIT)) {
             if (lys.loaded)
                 undo_step(0);                           /* (the copy from its first load) */
             lys.loaded = 0;
@@ -818,11 +824,11 @@ static uint32_t layer_leds(uint32_t *br)
             e = (k + 5u + 12u - root) % 12u;
             on = e == 0u;
             can = (mask >> e) & 1u;
-        } else if (l == LAYER_EDIT && !b) {             /* the engine lit, the others and INIT breathe; ((Skiff phase 6)
+        } else if (OLD_UI(l == LAYER_EDIT) && !b) {             /* the engine lit, the others and INIT breathe; ((Skiff phase 6)
                                                          * one the track may not play dark: engines.c eng_allowed) */
             on = p < NENG_SHOWN && p < LY_INIT && eng_vis(p) == TSEL->eng_req % NENGINES;
             can = p < NENG_SHOWN && p < LY_INIT ? (uint32_t)eng_allowed(song.sel, eng_vis(p)) : p == LY_INIT;
-        } else if (l == LAYER_EDIT && p < NLANE && drum_track(TSEL)) {   /* ((1.3) the lanes: sounding lit, muted
+        } else if (OLD_UI(l == LAYER_EDIT) && p < NLANE && drum_track(TSEL)) {   /* ((1.3) the lanes: sounding lit, muted
                                                          * breathe, as GLO's track mutes) */
             on = !((drum_mute[song.sel] >> p) & 1u);
             can = 1;
@@ -1297,7 +1303,7 @@ static void layer_cards(uint32_t l)
             draw_column(c, "LEVEL", val, unit, glo_sounding(k) ? VR_LIVE : VR_DIM, RATIO(&TP[P_LEVEL], trk[k].p[P_LEVEL]),
                         trk_icon(k, 1));
         }
-    } else if (l == LAYER_EDIT) {
+    } else if (OLD_UI(l == LAYER_EDIT)) {
         engine_columns();
     } else if (l == LAYER_PERF) {                       /* (Skiff) the throws as the B mockup shows them: how far */
         static const char *const TL[4] = {0, "REVERB", "DELAY", "DIST"};   /* each is out now (+0 at rest, in the knob's */
@@ -1426,7 +1432,7 @@ static void shift_map(smap_t *m)
     const sheet_t *sh = sheet_of(g);
     const char *pj = ui.home || g == GR_BROWSE ? SND : sel ? "STEP" : g == GR_STEPS ? "DIR" : g == GR_DELAY || g == GR_FXDLY ? "MODE" :
                      g == GR_INS ? "MIX" :            /* ((2.5) INSERT 2's page before) */
-                     g == GR_USER || g == GR_SLOTS ? "SLOT" : g == GR_BANK ? "PATTERN" : g == GR_EVENTS ? "ROW" :
+                     OLD_UI(g == GR_USER) || OLD_UI(g == GR_SLOTS) ? "SLOT" : g == GR_BANK ? "PATTERN" : g == GR_EVENTS ? "ROW" :
                      g == GR_SONG ? "ENTRY" : sh ? sh->pj : g == GR_SLICES ? "SLICE" : SND;
     static const smap_t ALL[9] = {{"BUTTONS", "PAGES", 0}, {"HOLD ONE", "ITS LAYER", 0}, {"HOLD SAVE", "UNDO", 0},
                                   {"+ SAVE", "TAKE", 2}, {"+ REC", "REC SET", 2}, {"+ BUTTON", "LOCK", 2},
@@ -1456,6 +1462,13 @@ static void shift_map(smap_t *m)
         m[6 + i] = ALL[i < 3u && sel ? 6u + i : i];
     if (sel)                                         /* ((2.0) there SHIFT + EDIT deletes, ui_input.c sel_delete) */
         m[11] = (smap_t){"+ EDIT", "DELETE", 2};
+    if (OLD_UI(g == GR_TAPE)) {                      /* ((TAPE) REC records onto it; + OCT- takes back, + EDIT clears) */
+        m[4] = (smap_t){"REC", "RECORD", 1};
+        m[10] = (smap_t){"+ OCT-", "TAKE BACK", 2};
+        m[11] = (smap_t){"+ EDIT", "CLEAR", 2};
+    }
+    if (tape_loop_key())                             /* (.. and there, and on HOME with REC TO TAPE: + PLAY its LOOP) */
+        m[6] = (smap_t){"+ PLAY", tape.loop ? "LOOP OFF" : "LOOP ON", 2};
     if (g == GR_SONG) {                              /* ((2.5) SONG: + PLAY the song from the entry, + EDIT empties it) */
         m[6] = (smap_t){"+ PLAY", "FROM HERE", 2};
         m[11] = (smap_t){"+ EDIT", "CLEAR", 2};

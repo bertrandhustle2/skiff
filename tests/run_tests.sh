@@ -268,6 +268,14 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "chord keys: diatonic and fixed chords, voicings, MONO root, releases, recording, ARP, MIDI IN, kits" "$OUT/chord_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/freetake_test" tests/freetake_test.c -lm
     run "(2.5) FREE TAKES: played stopped, the tempo, BARS and first beat guessed, the picker, OCT- / OCT+, one undo" "$OUT/freetake_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/tape_test" tests/tape_test.c -lm
+    run "TAPE: notes kept as played (no steps, no length beforehand), layers, LOOP, clear, undo, the pool, the page" "$OUT/tape_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/wave_test" tests/wave_test.c -lm
+    run "WAVE: the wavetable engine (tables built in place, equal power, band limits, pitch, POS sweeps, presets)" "$OUT/wave_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/tape_store_test" tests/tape_store_test.c -lm
+    run "TAPE in flash: kept with the projects and the autosave, torn writes, the third sample slot's sectors" "$OUT/tape_store_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/newui_test" tests/newui_test.c -lm
+    run "the new layout: EDIT the designer (a sound tried on a track, kept, undone), the moved pages, SAVE's two pages" "$OUT/newui_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/follow_test" tests/follow_test.c -lm
     run "(2.1) chord follow: roots, KEY SCALE FIT, NOTE, the tick order, ties, keys MIDI ARP, recording, STOP, kits, ids" "$OUT/follow_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/speaker_test" tests/speaker_test.c -lm

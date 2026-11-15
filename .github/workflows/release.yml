@@ -1,0 +1,18 @@
+# Builds the FM-1 install file (.fwsc) on GitHub's servers when a tag such as v2.6 is pushed, with the shared FM-1
+# build workflow (github.com/zvenson/fm1-build): it fetches the chip maker's compiler and kit, runs this
+# repository's own build, and attaches the package to the tag's release.
+name: release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  build:
+    uses: zvenson/fm1-build/.github/workflows/build.yml@v1
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      # (the icon step needs fontTools; the shared workflow installs Pillow only)
+      build: python3 -m pip install fonttools==4.67.0 && ./build.sh --release "${GITHUB_REF_NAME#v}"
+      packages: build/*.fwsc

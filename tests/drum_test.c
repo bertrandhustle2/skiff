@@ -1152,7 +1152,7 @@ static void kit_keys(void)
     bad += strcmp(drum_lane_name(&trk[0], DV_RIM), "CLAVE") != 0 || strcmp(drum_lane_abbr(&trk[0], DV_BELL), "CY") != 0;
     trk[0].p[P_E0] = DK_STD;
     bad += strcmp(drum_lane_name(&trk[0], DV_TOM), "TOM") != 0 || strcmp(drum_lane_name(&trk[0], DV_BELL), "BELL") != 0;
-    bad += ENG_DRUM.edit[0].max != DK_COUNT - 1 || strcmp(ENG_DRUM.edit[0].names[DK_77], "77") != 0;
+    bad += ENG_DRUM.edit[0].max != DK_PERC + SMP_SHOWN || strcmp(ENG_DRUM.edit[0].names[DK_77], "77") != 0;   /* ((TAPE) USR1, USR2) */
     trk[0].p[P_E0] = DK_DEEP;                         /* 1.5.6 (#216) */
     bad += strcmp(drum_lane_name(&trk[0], DV_BELL), "CYM") != 0 || strcmp(drum_lane_name(&trk[0], DV_TOM), "TOM") != 0;
     trk[0].p[P_E0] = DK_TIGHT;

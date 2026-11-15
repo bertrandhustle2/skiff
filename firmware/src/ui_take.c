@@ -7,6 +7,7 @@ static void ed_open(step_t *w, const track_t *t, uint32_t len);
 static int ed_add(step_t *s, uint32_t p, uint32_t tie);
 static void ed_close(track_t *t, step_t *w, uint32_t len, uint64_t keep);
 
+#if !FELUCCA_NEWUI                                    /* ((the new layout alone) no TAKES: take.c) */
 /* the hold of the note on in log entry i (pass want, step a): the steps it ties into, a + 1 .. *end - 1 (the
  * note's end, or the next note on the track: a new note ends the hold, as REC; (2.0) not when own: notes overlap);
  * held past the pass: to its end */
@@ -93,6 +94,7 @@ static uint32_t take_notes(uint32_t k, step_t *tmp, uint32_t len, uint32_t want,
 }
 
 /* "14 NOTES" / "1 NOTE" after what b holds (a ", " between them) */
+#endif
 static void say_count(char *b, uint32_t sz, uint32_t n, const char *what)
 {
     uint32_t i = str_len(b);
@@ -193,6 +195,7 @@ static void take_box_undo(int redo, uint32_t trk, const char *name)
  * BPM from 40 to 240 by how well the onsets (notes each within 30 ms of the one before, a chord strummed too: one, on
  * one step) sit on its 1/16 grid at its best phase, the length of the mean of their phases as unit vectors (1: all on
  * it); its peaks, the best first, but one within 80 .. 160 ahead when nearly as good. Main loop only */
+/* ((the new layout alone) no FREE TAKES: the picker is never open, and what draws it is not built) */
 #define FR_GAP 1250u                                    /* a phrase starts after a silence of 2.5 s (ms / 2) */
 #define FR_SPAN 15000u                                  /* .. and is 30 s long at most */
 #define FR_CHORD 15u                                    /* notes within 30 ms: one onset */
@@ -200,6 +203,21 @@ static void take_box_undo(int redo, uint32_t trk, const char *name)
 #define FR_NON 128u                                     /* onsets the guess reads (the phrase's first) */
 #define FR_NST 8u                                       /* onsets offered as the first beat */
 static const uint8_t FR_BARS[4] = {1, 2, 4, 8};
+#if FELUCCA_NEWUI
+static const struct {
+    uint8_t on, trk, nc, ci, bi, start, set, nst;       /* open; its track; the guesses, the one in use; FR_BARS's;
+                                                         * the first beat (an onset), TEMPO SET; first beats offered */
+    uint16_t bpm[FR_NC];                                /* the guesses */
+    uint32_t ph[FR_NC];                                 /* .. their grid's phase (2^32: a 1/16) */
+    uint32_t p0, non;                                   /* the phrase: free_ev from entry p0; its onsets */
+    uint32_t pat;                                       /* the pattern it opened on (trk_pat) */
+    int16_t bpm0, len0, div0;                           /* the tempo, LEN and DIV it opened with */
+} fr;
+static void fr_knob(uint32_t k, int32_t s) { (void)k; (void)s; }
+static void fr_close(int keep) { (void)keep; }
+/* SHIFT + SAVE: where recording is now */
+static void take_commit(uint32_t k) { (void)k; ui_message("REC RECORDS ON THE TAPE"); }
+#else
 static struct {
     uint8_t on, trk, nc, ci, bi, start, set, nst;       /* open; its track; the guesses, the one in use; FR_BARS's;
                                                          * the first beat (an onset), TEMPO SET; first beats offered */
@@ -588,3 +606,4 @@ static void take_commit(uint32_t k)
     ui_say(b, take_lost[k % NTRK] > from ? " PARTIAL" : full ? " AUTO FULL" : "");
     str_cpy(ui.msg2, "HOLD [SAVE]: UNDO", sizeof ui.msg2);
 }
+#endif /* FELUCCA_NEWUI */

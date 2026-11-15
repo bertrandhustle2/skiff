@@ -126,6 +126,7 @@ static void felucca_init(void)
     song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
     ui.home = 1;
     ui.force = 1;
+    tape_power_on();                          /* ((TAPE) REC onto the tape, SEQ's first tap its page: ui_tape.c) */
 }
 
 /* The power-on LED sweep (1.1, hal/fm1_led_anim.h: a soft light over the keys left to right, then the buttons swell

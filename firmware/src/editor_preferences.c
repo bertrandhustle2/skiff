@@ -101,7 +101,8 @@ static uint32_t ed_colors(const uint8_t *a, uint32_t n)   /* rc: 0 done, 1 argum
     if (n == 1u && a[0] == 2u)                         /* 2: removed */
         CPAL_BYTE = 0;
     else if (n != 1u || a[0] != 3u) {                  /* (3: the preview dropped, nothing saved) */
-        if (n < 2u || a[0] > 1u || a[1] >= NPALETTES ||
+        if (n < 2u || a[0] > 1u || a[1] >= NPALETTES || a[1] > 7u ||   /* ((TAPE build) the look is kept in 3 bits: the
+                                                                    * first eight themes) */
             ed_unpack7(a + 2, n - 2u, cpal_prev, sizeof cpal_prev) != sizeof cpal_prev)
             return n != 0u;                            /* (none: the state) */
         ui.force = 1;

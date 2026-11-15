@@ -21,6 +21,12 @@
 #include <stdint.h>
 
 #define FELUCCA_WEB 1
+#ifndef FELUCCA_NEWUI
+#define FELUCCA_NEWUI 1                  /* (TAPE build) as the unit's build (firmware/src/felucca.c): the new layout alone, */
+#endif
+#ifndef FELUCCA_SLICE
+#define FELUCCA_SLICE 0                  /* no SLICE engine */
+#endif
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 0                    /* (Skiff 2.0) as a release (build.py --release): no console, no USB SERIAL row */
 #endif

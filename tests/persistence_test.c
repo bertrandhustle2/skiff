@@ -125,6 +125,8 @@ static void reset(void)
     memset(&ui, 0, sizeof ui);
     memset(&favorites, 0, sizeof favorites);
     panel = PANEL_DEFAULT;
+    tape_reset();                                 /* ((TAPE) an empty tape; Skiff's own layout, as these tests know it) */
+    tape.to_pat = 1;
     host_tracks_init();
     fm1_ms = 0;
     transport_req = 0;

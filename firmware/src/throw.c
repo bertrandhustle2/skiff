@@ -66,7 +66,8 @@ static __attribute__((noinline)) void throw_off(void)
  * drive sends, the same on every engine */
 static const uint8_t THR_SEND[3] = {P_REV, P_DLY, P_DIST};
 static const uint8_t THR_TONE[NENGINES] = {[3] = P_E7, [ENGI_SAMPLE] = P_E4, [7] = P_E3, [ENGI_GRAIN] = P_E7,
-                                           [ENGI_SLICE] = P_E7};   /* (3 LOFI, 7 WHEEL; 0: the HOME KNOB 1) */
+                                           [ENGI_SLICE] = P_E7, [15] = P_E4};   /* (3 LOFI, 7 WHEEL, 15 WAVE's CUT;
+                                                                             * 0: the HOME KNOB 1) */
 static uint32_t throw_id(const track_t *t, uint32_t c)
 {
     uint32_t e = t->eng_req % NENGINES;

@@ -1645,6 +1645,7 @@ static void graph_title(void)
     cv_text_in(0, y, 240, f, ti, T_THEME, T_SURF);
 }
 
+#include "ui_tape_gr.c"                               /* (TAPE) its panel, HOME's lanes with it, HOME's bottom line */
 #include "ui_home.c"                                  /* Skiff: HOME's four tracks (graph_tracks, home_sig) */
 /* (2.5, #97, the user's 8C) MENU > LARGE on HOME: the strip under the tall cards names the six tracks' sounds, two
  * columns of three, the selected one a band of its colour (the themes' lanes as HOME's: CRYPT's stone, NEON's sign,
@@ -1685,6 +1686,8 @@ static int analog_page(const page_t *pg, const track_t *t)
     return pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_ANALOG;
 }
 
+static uint32_t wave_sig(const track_t *t);          /* (ui_wave.c) */
+static uint32_t save2_sig(void);                     /* (ui_save2.c) */
 static uint32_t graph_signature(void)
 {
     const page_t *pg = cur_page();
@@ -1692,7 +1695,8 @@ static uint32_t graph_signature(void)
     uint32_t h = 2166136261u, i;
     if (ui.home)                                     /* scope: redraw every other frame; Skiff's tracks ((2.5, 8C) and
                                                       * LARGE's names): on a change */
-        return ui.home_scope ? h ^ (ui.frame / 2u) : home_sig();
+        return ui.home_scope ? h ^ (ui.frame / 2u) : UI_NEW ? tape_newhome_sig() : home_sig();   /* ((TAPE) the new
+                                                         * layout: HOME is the tape's screen) */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
@@ -1714,11 +1718,15 @@ static uint32_t graph_signature(void)
     }
     if (pg->graph == GR_MOD)
         h ^= (mod_ui_route + 1u) * 40503u;
+    if (OLD_UI(pg->graph == GR_TAPE))                /* (TAPE) its notes, the playhead, the states */
+        h ^= tape_sig();
     if (sheet_of(pg->graph))                         /* (Skiff phase 7; FM6 LAB) a sheet's: what it edits (SHEETS) */
         h ^= sheet_of(pg->graph)->sig();
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
-    if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
+    if (pg->graph == GR_PSAVE || pg->graph == GR_SSAVE)   /* (the new layout's SAVE pages) */
+        h ^= save2_sig();
+    if (OLD_UI(pg->graph == GR_SLOTS)) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
         h += graph_pname_sig;
@@ -1783,6 +1791,8 @@ static uint32_t graph_signature(void)
     if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm, levels, FB) */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u;
     if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) h ^= sample_wave.pos * 13u + sample_wave.key;
+    if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_WAVE)   /* (WAVE) its table as built, POS as it plays */
+        h ^= wave_sig(t);
     if (pg->graph == GR_STEPS || step_page(pg->graph) || pg->graph == GR_FEEL) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
         if (pg->graph != GR_STEPS && ph / 16u != ui.bank)
@@ -2739,6 +2749,9 @@ static void graph_scope(uint16_t c)
 }
 
 #include "ui_pgraph.c"                               /* (Skiff U5, V1) the pages' own graphs */
+#include "ui_wave.c"                                 /* WAVE's table (eng_wave.c): its frames, the cycle playing */
+#include "ui_save2.c"                                /* the new layout's SAVE > PROJECT and SOUND */
+#include "ui_fxlist.c"                               /* .. FX's first page: the track's effects, a list */
 
 static void draw_graph(void)
 {
@@ -2787,6 +2800,8 @@ static void draw_graph(void)
         cv_oy = 0;
         if (ui.home_scope)
             graph_scope(c);
+        else if (UI_NEW)
+            graph_tape_home();                       /* (TAPE) the new layout: the tape (ui_tape_gr.c) */
         else
             graph_tracks();                          /* Skiff: the four tracks (ui_home.c) */
     } else {
@@ -2832,7 +2847,11 @@ static void draw_graph(void)
             graph_follow(t);
             break;
         case GR_FX:
-            graph_fx(t, c);
+            if (UI_NEW) {                            /* (the new layout: the track's effects, a list) */
+                cv_oy = 0;
+                graph_fx_list(t, c);
+            } else
+                graph_fx(t, c);
             break;
         case GR_SLCR:
             graph_slicer(t, c);
@@ -2848,14 +2867,26 @@ static void draw_graph(void)
             cv_oy = pad;
             graph_browse();
             break;
+#if !FELUCCA_NEWUI
         case GR_SLOTS:
             cv_oy = pad;
             graph_slots();
             break;
+#endif
+        case GR_PSAVE:                               /* (the new layout's SAVE pages: ui_save2.c) */
+            cv_oy = 0;
+            graph_psave();
+            break;
+        case GR_SSAVE:
+            cv_oy = 0;
+            graph_ssave();
+            break;
+#if !FELUCCA_NEWUI
         case GR_USER:
             cv_oy = pad;
             graph_user();
             break;
+#endif
         case GR_BANK:                                /* (Skiff phase 5) the pool view, from the panel's top (the mockup's) */
             cv_oy = 0;
             graph_bank();
@@ -2863,6 +2894,11 @@ static void draw_graph(void)
         case GR_DXSND:                               /* (Skiff phase 7, 8; FM6 LAB) a sheet, from the panel's top */
         case GR_FMOP:
         case GR_FMALL:
+        case GR_DSND:                                /* ((the new layout) the designer's: ui_design.c) */
+        case GR_DOSCA:
+        case GR_DOSCB:
+        case GR_DSUB:
+        case GR_DFLT:
             cv_oy = 0;
             sheet_of(pg->graph)->draw(t, c);
             break;
@@ -2870,6 +2906,12 @@ static void draw_graph(void)
             cv_oy = 0;
             graph_song();
             break;
+#if !FELUCCA_NEWUI
+        case GR_TAPE:                                /* (TAPE) the lanes from the panel's top */
+            cv_oy = 0;
+            graph_tape();
+            break;
+#endif
         case GR_EVENTS:
             cv_oy = pad;
             graph_events();
@@ -2930,6 +2972,12 @@ static void draw_graph(void)
             else if ((pg->scope == SC_ENGINE || pg->graph == GR_SMIX) && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE &&
                      sample_wave.ready) graph_sample(c);   /* ((#21) SAMPLES: the sample's) */
             else if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_FM6) graph_fm6(t, c);   /* EDIT 1 and 2 */
+            else if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_WAVE) {   /* (WAVE) its table; its filter as
+                                                      * ANALOG's (the same two values) */
+                cv_oy = 0;
+                if (pg->id[0] == P_E0) graph_wave(t, c, 0);
+                else graph_flt(t, c);
+            }
             else if (analog_page(pg, t)) {           /* (Skiff U5) ANALOG's OSC and FLT */
                 cv_oy = 0;
                 if (pg->id[0] == P_E0) graph_osc(t, c);

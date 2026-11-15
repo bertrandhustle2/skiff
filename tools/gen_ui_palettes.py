@@ -46,6 +46,13 @@ PALETTES = [
     # (Skiff) QUARK, design/mock_quark.py's A COLLIDER: a detector's dark, cyan readouts, gold for the one active thing;
     # the tracks the colour charges red, green, blue and their anticolours cyan, magenta, yellow
     ("QUARK",  (3, 7, 12),      (10, 21, 32),    (216, 243, 255), (79, 209, 255),  (255, 224, 102)),
+    # (TAPE build) three more, colours only (Skiff's font and widgets). TAPE: black, white values, orange for the one
+    # active thing, the tracks the four colours of a pocket tape machine's knobs (blue green white orange) and two more
+    ("TAPE",   (0, 0, 0),       (22, 22, 24),    (255, 255, 255), (255, 255, 255), (255, 122, 0)),
+    # PEA: an old handheld's green screen, four greens deep
+    ("PEA",    (8, 28, 10),     (20, 52, 24),    (196, 228, 110), (150, 200, 40),  (236, 255, 170)),
+    # CANDY: a light one, pink paper, plum text, magenta values, deep teal for the one active thing
+    ("CANDY",  (255, 226, 238), (250, 200, 222), (58, 16, 66),    (160, 0, 100),   (0, 92, 140)),
 ]
 SKIFF, CRYPT, NEON, QUARK = "SKIFF", "CRYPT", "NEON", "QUARK"
 # the six tracks' colours (src/gfx.c T_TRK; (Skiff phase 6) T5, T6 too): a palette not named here gives every track
@@ -57,7 +64,13 @@ TRACKS = {"SKIFF": [(255, 90, 54), (34, 195, 180), (255, 191, 0), (149, 128, 255
           "NEON": [(255, 64, 176), (48, 224, 255), (255, 222, 90), (255, 128, 56),    # pink cyan yellow orange
                    (170, 100, 255), (80, 255, 170)],                                  # violet mint
           "QUARK": [(255, 84, 96), (70, 220, 130), (90, 140, 255), (60, 220, 240),    # red green blue, anti: cyan
-                    (230, 96, 230), (250, 220, 80)]}                                  # magenta yellow
+                    (230, 96, 230), (250, 220, 80)],                                  # magenta yellow
+          "TAPE": [(40, 150, 255), (70, 205, 95), (236, 236, 236), (255, 122, 0),     # blue green white orange
+                   (255, 82, 110), (255, 214, 0)],                                    # red yellow
+          "PEA": [(170, 220, 60), (110, 200, 110), (220, 230, 120), (80, 190, 150),   # lime leaf straw sea
+                  (200, 200, 60), (150, 240, 170)],                                   # olive mint
+          "CANDY": [(188, 16, 104), (120, 40, 190), (0, 112, 124), (184, 56, 0),      # pink grape teal toffee
+                    (30, 80, 200), (20, 120, 50)]}                                    # blueberry apple
 NTRACKS = 6
 # the eleven palettes before THEME (index order: their ids PAL_TAG + index) and Felucca's oldest twenty (ids below 20)
 OLD11 = ["GREY", "GREEN", "AMBER", "ICE", "VIOLET", "ROSE", "PAPER", "HI-CON", "NIGHT", "MONO", "SKIFF"]

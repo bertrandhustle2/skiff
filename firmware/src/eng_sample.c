@@ -57,9 +57,12 @@ static uint32_t pow2_q16(int32_t d16)
 _Static_assert(SMP_USER_BASE + SMP_USER_FLASH_SLOTS * SMP_USER_SIZE <= FL_SLOT_HI, "SMK: the user slot past FL_SLOT");
 #else
 #define SMP_USER_BASE 0xA0000u
-#define SMP_USER_HAS(k) 1
-#define SMP_SHOWN SMP_USER_SLOTS                     /* the slots offered (the editor's SMP_INFO) */
-#define SMP_PICK_MAX SMP_NALL - 1                    /* SAMPLE's SET, GRAIN's SOURCE: the last value */
+/* (TAPE) the third slot's flash, 0xC8000 .. 0xDBFFF, keeps the tapes now (tape_store.c): two user slots, USR1 and
+ * USR2, as the SMK-37 has one. USR3 is never scanned, its erase / write refused (SMP_USER_HAS), not offered */
+#define SMP_USER_FLASH_SLOTS 2u
+#define SMP_USER_HAS(k) ((uint32_t)(k) < SMP_USER_FLASH_SLOTS)
+#define SMP_SHOWN SMP_USER_FLASH_SLOTS               /* the slots offered (the editor's SMP_INFO) */
+#define SMP_PICK_MAX (SMP_NSETS + SMP_USER_FLASH_SLOTS - 1)   /* SAMPLE's SET, GRAIN's SOURCE: up to USR2 */
 #endif
 #define SMP_USER_DATA 512u
 #define SMP_USER_MAGIC 0x504D5346u                  /* "FSMP" */

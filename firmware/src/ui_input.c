@@ -57,7 +57,7 @@ static void led_clear(uint8_t *nl, uint32_t id)
 static const uint8_t FAM_BTN[FAM_COUNT] = {B_HOME, B_ENV, B_LFO, B_FX, B_SCL, B_EDIT, B_GLO, B_SAVE,
                                            B_ARP, B_SEQ, B_GLO};   /* GLO: mixer + global settings; REC is transport */
 
-static uint32_t cur_fam(void) { return ui.home ? FAM_HOME : cur_page()->fam; }
+static uint32_t cur_fam(void) { return ui.home ? FAM_HOME : page_fam(cur_page()); }
 
 static int layer_set_open(void);                       /* (ui_layer.c) */
 static uint32_t layer_open(void);
@@ -97,7 +97,8 @@ static int mom_turn(uint32_t k, int32_t s)
         d = &TP[MIX_ID[k & 3u]];
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
-            pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_BROWSE || pg->graph == GR_USER ||
+            pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_BROWSE || OLD_UI(pg->graph == GR_USER) ||
+            pg->graph == GR_TAPE || pg->graph == GR_PSAVE || pg->graph == GR_SSAVE ||
             pg->graph == GR_BANK || sheet_of(pg->graph) || (pg->graph == GR_SLICES && k < 2u) ||
             (pg->graph == GR_MOD && k == 0u))
             return 0;
@@ -403,7 +404,8 @@ static void ui_leds(void)
         led_put(nl, panel.btn[B_FX], 1);                /* FX LATCH: lit while an effect or a macro is on */
     if (ui.layer)                                       /* the layer's button breathes while its map is up */
         led_put(nb, panel.btn[layer_btn()], 1);
-    led_put(nl, panel.btn[B_REC], song.rec != 0u && ui.layer != LAYER_REC);   /* (its layer: it breathes) */
+    led_put(nl, panel.btn[B_REC], (song.rec != 0u || tape_rec_on()) && ui.layer != LAYER_REC);   /* (its layer: it breathes;
+                                                         * (TAPE) the tape recording) */
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
@@ -533,6 +535,12 @@ static void rec_pass_undo(int armed);
 static int rec_tap(void)                                /* 1: the arming changed */
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
+    if (tape_rec_on() || (UI_NEW ? ui.home || page_fam(cur_page()) != FAM_SEQ : tape_page())) {   /* (TAPE) the new layout:
+                                                         * onto the tape on every page but SEQ's (there: the steps); Skiff's:
+                                                         * on the tape's page; and REC ends a take from anywhere */
+        tape_ui_rec();
+        return 1;
+    }
     song.rec = (uint8_t)(song.rec & bit ? 0u : song.rec | bit);
     ui.force = 1;                                     /* also refresh the status on MENU / ABOUT */
     rec_pass_undo((song.rec & bit) != 0u);            /* ((Skiff U2) what this arming records: one undo) */
@@ -1515,6 +1523,14 @@ static void edit_param(uint32_t slot, int32_t steps)
         song_knob(slot, steps);
         return;
     }
+    if (pg->graph == GR_PSAVE || pg->graph == GR_SSAVE) {   /* (the new layout's SAVE pages: ui_save2.c) */
+        save2_knob(slot, steps);
+        return;
+    }
+    if (OLD_UI(pg->graph == GR_TAPE)) {                   /* (TAPE) LOOP, END (faster turned faster) */
+        tape_knob(slot, slot == 1u ? accel(EN_K1 + slot, steps, 200) : steps);
+        return;
+    }
     if (sheet_of(pg->graph)) {                            /* (Skiff phase 7, 8; FM6 LAB) a sheet: its window (SHEETS) */
         sheet_of(pg->graph)->knob(slot, steps);
         return;
@@ -1559,7 +1575,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
-    if ((pg->graph == GR_USER && slot == 2u) || (pg->graph == GR_SLOTS && slot == 1u)) {   /* (Skiff U2) USER's KNOB 3:
+    if ((OLD_UI(pg->graph == GR_USER) && slot == 2u) || (OLD_UI(pg->graph == GR_SLOTS) && slot == 1u)) {   /* (Skiff U2) USER's KNOB 3:
                                                            * ERASE, one step further NAME; (1.2.1, #6) PROJECT's KNOB 2:
                                                            * DELETE, then NAME */
         int32_t st = ui.act == slot + 1u ? 1 + (int32_t)ui.act2 : 0;
@@ -1568,7 +1584,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.act2 = st == 2;
         return;
     }
-    if (pg->graph == GR_SLOTS && slot == 2u) {            /* ((2.5, the user's 3A) PROJECT's KNOB 3: LOAD (a used */
+    if (OLD_UI(pg->graph == GR_SLOTS) && slot == 2u) {            /* ((2.5, the user's 3A) PROJECT's KNOB 3: LOAD (a used */
         int32_t st = ui.act == 3u ? 1 + (int32_t)ui.act2 : 0;   /* slot), NEW, CLEAR SONG, CLEAR TRACKS; left past */
         st = clamp(st + steps, 0, project_used((uint32_t)song.g[G_SLOT] - 1u) ? 4 : 3);   /* the first: none picked */
         ui.act = st ? 3u : ui.act == 3u ? 0u : ui.act;
@@ -1584,7 +1600,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.act2 = 0;
         return;
     }
-    if (pg->graph == GR_USER) {                           /* KNOB 1 the slot */
+    if (OLD_UI(pg->graph == GR_USER)) {                           /* KNOB 1 the slot */
         if (slot == 0u)
             ui.uslot = (uint8_t)clamp((int32_t)ui.uslot + steps, 0, UP_SLOTS - 1);
         return;
@@ -1736,7 +1752,7 @@ static void act_do(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_USER) {                   /* 1 LOAD, 2 ERASE (or NAME), 3 SAVE (the NAME screen first) */
+    if (OLD_UI(cur_page()->graph == GR_USER)) {                   /* 1 LOAD, 2 ERASE (or NAME), 3 SAVE (the NAME screen first) */
         if (c == 2u && ui.act2) {                         /* ((Skiff U2) NAME: was EDIT) */
             ui.act = ui.act2 = 0;
             name_rename();
@@ -1756,7 +1772,7 @@ static void act_do(void)
             name_open(NK_USER_SAVE, ui.uslot);
         return;
     }
-    if (cur_page()->graph == GR_SLOTS && c == 1u) {       /* ((Skiff U2) PROJECT's NAME: was EDIT) */
+    if (OLD_UI(cur_page()->graph == GR_SLOTS) && c == 1u) {       /* ((Skiff U2) PROJECT's NAME: was EDIT) */
         int nm = ui.act2;
         ui.act = ui.act2 = 0;
         if (nm)
@@ -1953,7 +1969,7 @@ static void presets_turn(int32_t s)
             cursor_turn(s);
             cursor_audition();                            /* ((1.3) STEP PREVIEW) */
         }
-    } else if (g == GR_USER || g == GR_BANK || g == GR_SLOTS || g == GR_EVENTS || g == GR_SONG) {
+    } else if (OLD_UI(g == GR_USER) || g == GR_BANK || OLD_UI(g == GR_SLOTS) || g == GR_EVENTS || g == GR_SONG) {
         edit_param(0, s);                                 /* KNOB 1's */
         ui.hot_col = 0;
         ui.hot_t = 40;
@@ -2021,6 +2037,9 @@ static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok
     return tap ? BT_TAP : BT_NONE;
 }
 
+static void design_tap(void);                       /* (the new layout's designer: ui_design.c, included below) */
+static void design_hold(void);
+static void design_poll(void);
 /* the quick layers: ui_layer.c (included after this file) */
 static void layer_masks(void);
 static void layer_arm(uint32_t pressed, uint32_t now);
@@ -2226,6 +2245,31 @@ static void ui_input(void)
         song.seq_mode = 0;
     }
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
+    {   /* (TAPE) the new layout: REC held, another take (ui_tape.c tape_ui_retake); PLAY held, LOOP. Both act on their
+         * press as always (REC arms or ends a take, PLAY starts or stops); the hold comes on top */
+        static uint32_t rec_t0, play_t0, edit_t0;
+        uint32_t rh = btn_hold(&rec_t0, B_REC, now, 1), ph = btn_hold(&play_t0, B_PLAY, now, 1), eh;
+        int plain = !ui.menu && !ui.confirm && !name_on() && !ui.home_t0 && !fr.on && !ui.layer;
+        if (UI_NEW && plain) {
+            if (rh == BT_HOLD)
+                tape_ui_retake();
+            if (ph == BT_HOLD)
+                tape_ui_loop();
+        }
+        /* (the new layout) EDIT is the designer's (ui_design.c): tapped, its pages; held, its sound onto the track. No
+         * layer of its own (ui_layer.c ly_avail). Pressed with SHIFT, in a dialog or under another layer: neither */
+        if (((fm1_in.buttons >> panel.btn[B_EDIT]) & 1u) && (!plain || ui.ly || ui.uboot))
+            edit_t0 |= 3u;
+        eh = btn_hold(&edit_t0, B_EDIT, now, 1);
+        if (UI_NEW && plain && !ui.uboot) {
+            if (eh == BT_HOLD)
+                design_hold();
+            else if (eh == BT_TAP)
+                design_tap();
+        }
+        if (UI_NEW)
+            design_poll();
+    }
     if (ui.home_t0 && ((pressed >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm && !name_on()) {
         ui.home_t0 |= 2u;                               /* (Skiff) SHIFT (HOME held) + SAVE: TAKE (ui_take.c); no */
         ui.save_t0 |= 2u;                               /* HOME tap, no MENU, no SAVE page, no undo */
@@ -2248,6 +2292,18 @@ static void ui_input(void)
     }
 #endif
     rec_own = ui.lock == LAYER_REC;                     /* (its press closes the REC layer: no arming) */
+    tape_ui_poll();                                     /* ((TAPE) a take that ran out of room: said once) */
+    if (shift_held() && tape_page() && !ui.menu && !ui.confirm && !name_on() &&
+        (pressed & ((1u << panel.btn[B_EDIT]) | (1u << panel.btn[B_OCTDN])))) {   /* ((TAPE) SHIFT + EDIT: the track's
+                                                         * notes off it; SHIFT + OCT-: the last take or clear back) */
+        if ((pressed >> panel.btn[B_EDIT]) & 1u)
+            tape_ui_clear();
+        else
+            tape_ui_undo();
+        pressed &= ~((1u << panel.btn[B_EDIT]) | (1u << panel.btn[B_OCTDN]));
+        shift_mark();
+        home_long = 0;
+    }
     if (shift_held() && ((pressed >> panel.btn[B_EDIT]) & 1u) && !ui.menu && !ui.confirm && !name_on() &&
         song.seq_mode && !ui.home && (step_page(cur_page()->graph) || cur_page()->graph == GR_FEEL ||
                                       cur_page()->graph == GR_SONG)) {
@@ -2277,7 +2333,7 @@ static void ui_input(void)
     layer_lock_input(pressed);                          /* (a button closes a locked layer) */
     layer_arm(pressed, now);
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on ||
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || save2_page() ||
                             fr.on);                     /* ((2.5) a free take's picker: OCT+ keeps, OCT- puts back) */
     oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
@@ -2414,6 +2470,10 @@ static void ui_input(void)
         enc_drop();
         return;
     }
+    if (save == BT_HOLD && UI_NEW && tape_undo_newest())   /* (TAPE) SAVE held: the tape's last take or wipe, when
+                                                         * that is the newest thing to undo */
+        tape_ui_undo();
+    else
     if (save == BT_HOLD)                                /* SAVE held: undo, one level back (ui.c undo_step) */
         undo_step(0);                                   /* (Skiff: one level back; OCT- / OCT+ then: ui.undo_w) */
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
@@ -2503,6 +2563,10 @@ static void ui_input(void)
                 shift_mark();                           /* ((2.5) SHIFT + PLAY on SONG: the song from the entry, */
                 home_long = 0;                          /* bank.c song_from) */
                 song_from();
+            } else if (shift_held() && tape_loop_key() && !ui.menu && !ui.confirm && !name_on()) {
+                shift_mark();                           /* ((TAPE) SHIFT + PLAY on HOME (REC TO TAPE), on its page: LOOP) */
+                home_long = 0;
+                tape_ui_loop();
             } else
                 play_press();
             break;
@@ -2521,7 +2585,8 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-;
+            if (act_cols() || save2_page() || layer_set_open() || ui.ml.on)   /* action pages ((the new layout) SAVE's
+                                                         * two): enter / back (below); SET layers: OCT-;
                                                          * ((1.3) MIDI LEARN: below) */
                 break;
             if (shift_held() && song.seq_mode && !ui.home &&   /* ((2.0) SHIFT + OCT- / OCT+ on NOTES, FEEL: COPY, */
@@ -2558,6 +2623,8 @@ static void ui_input(void)
     if (act_cols() && oct && ui.undo_w) {               /* ((Skiff U2) the undo window first, as its box says:
                                                          * OCT- further back, OCT+ redo) */
         undo_step((oct & 2u) != 0u);
+    } else if (save2_page() && (oct & 3u)) {            /* (the new layout's SAVE pages: OCT+ saves, OCT- loads) */
+        save2_oct(oct);
     } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it, or (none picked) goes HOME */
@@ -2651,7 +2718,7 @@ static void ui_input(void)
             continue;
         }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
-            ((pg->graph == GR_USER || pg->graph == GR_BANK || pg->graph == GR_MOD) && k == 0u)
+            ((OLD_UI(pg->graph == GR_USER) || pg->graph == GR_BANK || pg->graph == GR_MOD) && k == 0u)
             || (pg->graph == GR_SLICES && k < 2u) || pg->graph == GR_SONG || sheet_of(pg->graph)) {   /* (not an empty
                                                          * column; (Skiff) SONG's four; a sheet's four) */
             ui.hot_col = (uint8_t)k;
@@ -2761,6 +2828,7 @@ timeout:
 
 #include "ui_dx.c"                                      /* (Skiff phase 7, 8) EDIT > SOUND: the DRUM-X sound sheet */
 #include "ui_fm6.c"                                     /* (FM6 LAB) EDIT > OPERATOR, ALL OPS: FM6's patch */
+#include "ui_design.c"                                  /* (the new layout) EDIT: the designer, its pages */
 
 /* (FM6 LAB) the sheets (ui.c sheet_t): their pages' every hook (the knobs, cards, panel, header, PRESETS, SELECT,
  * SHIFT's map) goes through here */
@@ -2770,6 +2838,11 @@ static const sheet_t SHEETS[] = {
      "OPERATOR"},
     {GR_FMALL, ENGI_FM6, FM_NWIN, &fm_ui[2], fm_all_knob, fm_all_cards, fm_sig, graph_fm_all, fm_all_title, fm_op_turn,
      "OPERATOR"},
+    {GR_DSND, ENGI_WAVE, 1, &ds.win[0], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
+    {GR_DOSCA, ENGI_WAVE, 2, &ds.win[1], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
+    {GR_DOSCB, ENGI_WAVE, 2, &ds.win[2], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
+    {GR_DSUB, ENGI_WAVE, 1, &ds.win[3], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
+    {GR_DFLT, ENGI_WAVE, 3, &ds.win[4], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
 };
 static const sheet_t *sheet_of(uint32_t g)
 {

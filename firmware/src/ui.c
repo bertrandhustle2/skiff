@@ -9,6 +9,11 @@ static void panel_setup(void);
 static void project_load(uint32_t slot);
 static int project_used(uint32_t slot);
 static int proj_old(uint32_t slot);          /* ((2.0) OLD FORMAT: project.c) */
+static uint8_t psave_row;                    /* (the new layout's SAVE > PROJECT SAVE, ui_save2.c) the row picked: 0 .. 3
+                                              * the slots A .. D, 4 NEW */
+static uint8_t design_trk;                   /* (the new layout's designer, ui_design.c) 1 + the track its sound is
+                                              * only tried on; 0: no trial */
+static int design_on(void) { return design_trk != 0; }
 static int up_used(uint32_t k);              /* user presets: upreset.c */
 static int up_old(uint32_t k);               /* ((2.0) OLD FORMAT) */
 static int up_load(uint32_t k);
@@ -564,8 +569,9 @@ static uint32_t large_kind(void)
     if (ui.home)
         return LK_TALL;
     g = cur_page()->graph;
-    return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_BANK || step_page(g) ||
-           g == GR_FEEL || g == GR_SLICES || g == GR_EVENTS || g == GR_SONG || sheet_of(g) ? LK_LABEL : LK_TALL;
+    return g == GR_BROWSE || OLD_UI(g == GR_SLOTS) || OLD_UI(g == GR_USER) || g == GR_BANK || step_page(g) ||
+           g == GR_FEEL || g == GR_SLICES || g == GR_EVENTS || g == GR_SONG || g == GR_TAPE || g == GR_PSAVE || g == GR_SSAVE || sheet_of(g) ? LK_LABEL
+                                                                                                              : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -647,8 +653,36 @@ static uint32_t smx_zone(uint32_t *k)
 }
 static int smx_page_on(void) { return !ui.home && cur_page()->graph == GR_SMIX; }   /* (slice_store.c: saved once left) */
 
+/* the button a page is under. The new layout (tape.c UI_NEW) moves some: SAVE's PATTERNS to SEQ (ui_save2.c) */
+static uint32_t page_fam(const page_t *pg)
+{
+    if (UI_NEW && pg->graph == GR_BANK)                 /* (the new layout) PATTERNS: with the steps, under SEQ */
+        return FAM_SEQ;
+    if (UI_NEW && pg->fam == FAM_EDIT && !GR_DESIGN(pg->graph)) {   /* EDIT is the designer
+                                                         * (ui_design.c). What it held: a filter's page (ANALOG's FLT)
+                                                         * and the FM operators' envelopes under ENV, the rest under FX */
+        if (pg->graph == GR_ADSR || (pg->scope == SC_ENGINE && pg->id[0] == P_E4 &&
+                                     ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG))
+            return FAM_ENV;
+        return FAM_FX;
+    }
+    return pg->fam;
+}
 static int page_visible(uint32_t i)
 {
+    if (PAGES[i].graph == GR_TAPE)                      /* ((TAPE) its page of before: HOME is the tape's screen now) */
+        return !UI_NEW;
+    if (PAGES[i].graph == GR_PSAVE || PAGES[i].graph == GR_SSAVE)   /* (the new layout's SAVE pages: ui_save2.c) */
+        return UI_NEW;
+    if (UI_NEW && (PAGES[i].graph == GR_SLOTS || PAGES[i].graph == GR_USER))   /* (.. in place of these) */
+        return 0;
+    if (GR_DESIGN(PAGES[i].graph)) {                    /* (the designer's:
+                                                         * the new layout's, on a WAVE sound: ui_design.c) */
+        if (!UI_NEW)
+            return 0;
+    } else if (UI_NEW && PAGES[i].scope == SC_ENGINE && TSEL->eng_req % NENGINES == ENGI_WAVE) {
+        return 0;                                       /* (.. in place of WAVE's own two pages) */
+    }
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const sheet_t *sh = sheet_of(PAGES[i].graph);
     uint32_t id = PAGES[i].id[0];
@@ -738,22 +772,43 @@ static void unit_g_boot(void)
         settings_save();
 }
 
+/* the order a family's button and SELECT step its pages in: their place in PAGES (MIXER before GLO's); the new layout:
+ * SAVE's PROJECT SAVE and SOUND SAVE first, PATTERNS the last of SEQ's (what moved from EDIT to FX and ENV comes after
+ * their own pages as it stands) */
+static int32_t page_order(uint32_t i)
+{
+    if (PAGES[i].graph == GR_PSAVE || PAGES[i].graph == GR_SSAVE)
+        return PAGES[i].graph == GR_PSAVE ? -3 : -2;
+    if (UI_NEW && PAGES[i].graph == GR_BANK)
+        return 1000 + (int32_t)i;
+    return PAGES[i].fam == FAM_TRK ? -1 : (int32_t)i;
+}
 static uint32_t page_first(uint32_t fam)
 {
     uint32_t i;
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam)
+        if (page_fam(&PAGES[i]) == fam)
             return i;
     return 0;
 }
 /* (Skiff U3, N3, N5) a family's first page the track has; NPAGES: none */
 static uint32_t page_vis_first(uint32_t fam)
 {
-    uint32_t i;
+    uint32_t i, best = NPAGES;
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam && page_visible(i))
-            return i;
-    return NPAGES;
+        if (page_fam(&PAGES[i]) == fam && page_visible(i) && (best == NPAGES || page_order(i) < page_order(best)))
+            best = i;
+    return best;
+}
+/* .. the one after page p there, round to the first (its button pressed again) */
+static uint32_t page_vis_next(uint32_t fam, uint32_t p)
+{
+    uint32_t i, best = NPAGES;
+    for (i = 0; i < NPAGES; i++)
+        if (page_fam(&PAGES[i]) == fam && page_visible(i) && page_order(i) > page_order(p) &&
+            (best == NPAGES || page_order(i) < page_order(best)))
+            best = i;
+    return best != NPAGES ? best : page_vis_first(fam);
 }
 /* (params.c page_desc: LANES' LEVEL; (2.0, #36) LANE MIX's: on DRUM-X the sound sheet's lane, ui_dx.c) */
 static uint8_t *page_lane_p(void) { return TSEL->eng_req % NENGINES == ENGI_DRUMX ? &dx_ui_lane : &ui.lane; }
@@ -870,7 +925,21 @@ static void page_entered(void)
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
-    ui.act = pg->graph == GR_USER ? 4u : 0u;            /* the save screen: ready for OCT+ ((Skiff) PATTERNS: act_col) */
+    ui.act = OLD_UI(pg->graph == GR_USER) ? 4u : 0u;            /* the save screen: ready for OCT+ ((Skiff) PATTERNS: act_col) */
+    if (!ui.home && pg->graph == GR_PSAVE) {            /* (.. SAVE > PROJECT SAVE: on the project's own slot, else the
+                                                         * first empty one) */
+        uint32_t m = project_mark() & 0xFFu, k;
+        for (k = 0; k < 3u && project_used(k); k++)
+            ;
+        psave_row = (uint8_t)(m >= 'A' && m <= 'D' ? m - 'A' : k);
+    }
+    if (!ui.home && pg->graph == GR_SSAVE) {            /* (the new layout's SAVE > SOUND: on the first empty slot) */
+        uint32_t k;
+        for (k = 0; k < UP_SLOTS && (up_used(k) || up_old(k)); k++)
+            ;
+        if (k < UP_SLOTS)
+            ui.uslot = (uint8_t)k;
+    }
     ui.act2 = ui.ev_del = ui.ev_top = 0;
     ui.force = 1;
 }
@@ -1259,20 +1328,18 @@ static void open_family(uint32_t fam)
         page_none(PAGES[page_first(fam)].title);
         return;
     }
-    if (!ui.home && cur_page()->fam == fam) {          /* same button again: next page */
-        uint32_t n, i = ui.page;
-        for (n = 0; n < NPAGES; n++) {
-            i = (i + 1u) % NPAGES;
-            if (PAGES[i].fam == fam && page_visible(i)) break;
-        }
-        ui.page = (uint8_t)i;
+    if (!ui.home && page_fam(cur_page()) == fam) {     /* same button again: next page */
+        ui.page = (uint8_t)page_vis_next(fam, ui.page);
     } else {                                           /* ((Skiff U3, N3) the page it was left on, SAVE's too: USER the
                                                         * first time, the sound save screen) */
         uint32_t last = ui.fam_last[fam], i;
         if (!last && fam == FAM_SAVE)
             for (last = 0; last < NPAGES && PAGES[last].graph != GR_USER; last++)
                 ;
-        i = last < NPAGES && PAGES[last].fam == fam && page_visible(last) ? last : page_vis_first(fam);
+        i = last < NPAGES && page_fam(&PAGES[last]) == fam && page_visible(last) ? last : page_vis_first(fam);
+        if (UI_NEW && fam == FAM_SAVE)                 /* (the new layout: SAVE opens on PROJECT, always) */
+            for (i = 0; i < NPAGES && PAGES[i].graph != GR_PSAVE; i++)
+                ;
         ui.page = (uint8_t)i;
     }
     ui.fam_last[fam] = ui.page;
@@ -1300,8 +1367,8 @@ static void open_global(void)
 
 /* (Skiff phase 8, DESIGN.md rule 3) SELECT: the page before (dir < 0) or after this one in its family, in the order its
  * button steps them (GLO's MIXER, then GLOBAL and SYSTEM: one family), the ends where they are (no wrap); 1 = moved */
-static uint32_t page_group(uint32_t i) { return PAGES[i].fam == FAM_TRK ? FAM_GLO : PAGES[i].fam; }
-static int32_t page_order(uint32_t i) { return PAGES[i].fam == FAM_TRK ? -1 : (int32_t)i; }
+static uint32_t page_group(uint32_t i) { return PAGES[i].fam == FAM_TRK ? FAM_GLO : page_fam(&PAGES[i]); }
+
 static int page_step(int32_t dir)
 {
     uint32_t g = page_group(ui.page), i, best = NPAGES;
@@ -1716,6 +1783,7 @@ static void load_end(track_t *t)
     undo.t_ms = fm1_ms;
 }
 
+#include "ui_tape.c"                                  /* SEQ > TAPE: the tape's page (tape.c) */
 #include "ui_take.c"                                  /* Skiff: SHIFT + SAVE, TAKES into the track (take_commit) */
 
 /* the editor's SET right after a load on the selected track (an audition: G_ENGSEL, then the patch's
@@ -2025,6 +2093,10 @@ static void preset_fill(int16_t *p, const engine_t *e, uint32_t pi)
         for (i = 0; i < NELEM(pr->more) && pr->more[i].id; i++)   /* ((Skiff) its LFO, GLIDE, ..: core.h) */
             p[pr->more[i].id] = pr->more[i].v;
     }
+#if !FELUCCA_FM4
+    if (e == &ENG_WAVE)                               /* (TAPE build) WAVE's own sixteen more (eng_wave.c WV_PX) */
+        wave_px(p, pi);
+#endif
 }
 /* preset pi of the engine the track asked for: the sound only (not the steps, not param_kept) */
 static void apply_preset_to(track_t *t, uint32_t pi)
@@ -2440,9 +2512,9 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     if (pg->graph == GR_EVENTS)                  /* AUTOMATION: no knob is an action, OCT+ adds / toggles (ev_oct); */
         return ui.ev_top ? 8u : 16u;             /* ((Skiff U3, R5) its top row: CLEAR on KNOB 4) */
     if (pg->graph == GR_SONG) return 16u;       /* (Skiff phase 5) SONG: so too; OCT+ plays or sets (song_oct) */
-    if (pg->graph == GR_USER)
+    if (OLD_UI(pg->graph == GR_USER))
         return 14u;                              /* LOAD ERASE (or NAME, ui.act2) SAVE */
-    if (pg->graph == GR_SLOTS)
+    if (OLD_UI(pg->graph == GR_SLOTS))
         return 14u;                              /* ((Skiff U2) NAME, was EDIT; (1.2.1) DELETE or NAME) LOAD (or NEW) SAVE */
     if (pg->graph == GR_BANK)
         return 8u;                               /* ((Skiff phase 5) the pool view: CLEAR, always picked: act_col) */
@@ -2492,11 +2564,11 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
     uint32_t id = cur_page()->id[c & 3u];
     if (cur_page()->graph == GR_EVENTS) return ui.ev_top ? "CLEAR" : ev_act_name();
     if (cur_page()->graph == GR_SONG) return song_act_name();
-    if (cur_page()->graph == GR_USER)
+    if (OLD_UI(cur_page()->graph == GR_USER))
         return c == 2u && ui.act2 ? "NAME" : UP_GO[(c + 2u) % 3u];
-    if (cur_page()->graph == GR_SLOTS && c == 1u)
+    if (OLD_UI(cur_page()->graph == GR_SLOTS) && c == 1u)
         return ui.act == 2u && ui.act2 ? "NAME" : "DELETE";   /* ((1.2.1, #6) DELETE, one step further NAME) */
-    if (cur_page()->graph == GR_SLOTS && id == G_LOAD) {   /* ((2.5, 3A) KNOB 3: LOAD, NEW ((1.2.1, #6) an empty */
+    if (OLD_UI(cur_page()->graph == GR_SLOTS) && id == G_LOAD) {   /* ((2.5, 3A) KNOB 3: LOAD, NEW ((1.2.1, #6) an empty */
         static const char *const K3[4] = {"LOAD", "NEW", "CLEAR SONG", "CLEAR TRACKS"};   /* slot's), CLEAR SONG, */
         return K3[proj_k3()];                                                         /* CLEAR TRACKS */
     }
@@ -2521,9 +2593,9 @@ static int act_ready(void)
         return song_pick() >= SPICK_NEW && song_pick() < SPICK_CLEAR ? pool_alloc() < NPAT :   /* ((2.0) NEW, COPY+) */
                song_pick() == SPICK_SOUND ? snd_of(s, sb) :   /* ((#30) a sound as it was loaded) */
                song_pick() == SPICK_CLEAR ? ent_on(s, sg.entry) : song_pick() || ent_on(s, sg.entry);
-    if (cur_page()->graph == GR_USER)
+    if (OLD_UI(cur_page()->graph == GR_USER))
         return c == 3u ? !song.playing : up_used(ui.uslot) && (c == 1u || !song.playing);
-    if (cur_page()->graph == GR_SLOTS && c == 1u)       /* ((Skiff U2) NAME; (1.2.1) DELETE) */
+    if (OLD_UI(cur_page()->graph == GR_SLOTS) && c == 1u)       /* ((Skiff U2) NAME; (1.2.1) DELETE) */
         return project_used((uint32_t)song.g[G_SLOT] - 1u) && !transport_busy();
     if (cur_page()->graph == GR_BANK)                   /* (Skiff phase 5) a pattern nothing uses, stopped */
         return !transport_busy() && (ui.bact == BA_UNUSED ? pool_unused() != 0u : pool_used(ui.bslot % NPAT) &&

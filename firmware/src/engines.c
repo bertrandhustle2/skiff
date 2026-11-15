@@ -18,6 +18,7 @@ static void *eng_part(const track_t *t);
 #include "eng_drum.c"           /* DRUM: the 8-lane kit (drum_voice.c) */
 #include "eng_drumx.c"          /* (Skiff) DRUM-X: JIANT FM's drum engine (drumx_voice.c, GPL-3.0-only) */
 #include "eng_noise.c"
+#include "eng_wave.c"            /* WAVE: wavetables, Serum's way (after eng_noise.c: isqrt32) */
 #include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0) */
 #include "fm4_convert.c"        /* DIGITAL's tables, and its sounds -> FM6 */
 #if FELUCCA_FM4
@@ -39,6 +40,7 @@ typedef union {
     drumx_lane_t drumx[DV_NLANE];
     fm6_note_t fm6[FM6_POLY];
     drw_vc_t wheel[NVOICE];
+    wv_part_t wave;              /* WAVE's table, built in place */
 #if FELUCCA_SLICE
     int16_t slice[SLC_NV][SLC_RB];   /* SLICE's reverse windows */
 #endif
@@ -95,6 +97,7 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_FM4_GONE,               /* 13: reserved (FELUCCA_SLICE=0 builds without SLICE: never offered, eng_ok) */
 #endif
     &ENG_DRUMX,                  /* 14 (ENGI_DRUMX, Skiff) */
+    &ENG_WAVE,                   /* 15 (ENGI_WAVE) */
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -126,6 +129,9 @@ static const char *snd_missing(const track_t *t, uint32_t *code)
  * stores and the protocol hold them); only this table orders them */
 static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     0,                           /* ANALOG */
+#if !FELUCCA_FM4
+    15,                          /* WAVE (a build with DIGITAL has no key left for it: core.h NENG_SHOWN) */
+#endif
     12,                          /* FM6 */
 #if FELUCCA_FM4
     1,                           /* DIGITAL */
@@ -141,7 +147,10 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE); }
+static int eng_ok(uint32_t e)
+{
+    return e < NENGINES && (FELUCCA_FM4 ? e != ENGI_WAVE : e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE);
+}
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
@@ -160,7 +169,7 @@ static uint32_t eng_step(uint32_t e, int32_t dir)
  * NHEAVY). The one rule: picking, presets, user presets, the editor, projects ask it */
 static int eng_allowed(uint32_t k, uint32_t e)
 {
-    return k < NHEAVY || (e % NENGINES != ENGI_PHYS && e % NENGINES != ENGI_GRAIN);
+    return k < NHEAVY || (e % NENGINES != ENGI_PHYS && e % NENGINES != ENGI_GRAIN && e % NENGINES != ENGI_WAVE);
 }
 static uint32_t eng_step_for(uint32_t k, uint32_t e, int32_t dir)   /* eng_step past what track k may not play */
 {

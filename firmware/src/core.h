@@ -63,11 +63,14 @@ _Static_assert(NTRK <= 8 && NPART < VOICES_1CORE && VOICES_2CORE <= NVOICE * NPA
                                   * sounds (fm4_convert.c), settings PER1..PER3, 1.0's FM6 bank. Only the converter
                                   * (web/conv) and its tests build them; 2.0 keeps such a record's bytes (OLD FORMAT) */
 #endif
-#define NENGINES 15u             /* (Skiff) DRUM-X (14) after SLICE (13): the other engines keep their numbers */
+#define NENGINES 16u             /* (Skiff) DRUM-X (14) after SLICE (13): the other engines keep their numbers;
+                                  * WAVE (15, eng_wave.c) after it */
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define ENGI_SLICE 13u           /* reserved without FELUCCA_SLICE, as DIGITAL is without FELUCCA_FM4 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer,
-                                                * the editor, in the display order of engines.c ENGINE_ORDER */
+#define NENG_SHOWN (NENGINES - 1u - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
+                                                * in the display order of engines.c ENGINE_ORDER: fifteen at most (the EDIT
+                                                * layer's keys: ui_layer.c LY_INIT), so WAVE where DIGITAL is not built, and
+                                                * the other way round (FELUCCA_FM4: a test build) */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 

@@ -159,6 +159,8 @@ static void ui_power_on(void)
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song); sel_set(0);
     memset(&ui, 0, sizeof ui);
+    tape_reset();                                 /* ((TAPE) an empty tape, REC TO STEPS: Skiff's own recording) */
+    tape.to_pat = 1;
     cin_left = cin_total = 0;                     /* (no count-in) */
     memset(&nm, 0, sizeof nm);                    /* NAME closed, no project name */
     proj_name[0] = 0;

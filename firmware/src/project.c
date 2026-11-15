@@ -1233,6 +1233,7 @@ static int proj_unpack2(project_t *q, const uint8_t *b, const proj_fmt_t *f)
 }
 
 #ifndef PROJ_HOST
+#include "tape_store.c"                          /* (TAPE) the tape kept with the projects and the autosave */
 #if FELUCCA_LEGACY
 /* the GM drum part of a project of before 1.0 (proj_drums_to_part): DRUM's first kit, as a preset load sets it
  * (until 1.0.2 the SAMPLE engine's PERC set, retired since) */
@@ -1414,7 +1415,10 @@ static int project_save_as(uint32_t slot, const char *name)
         proj_name_get(proj_name, (const uint8_t *)p->name);
         proj_cur = (uint8_t)(slot & 3u);
         project_clean();
-        ui_message("SAVED");
+        if (tape_store_save(slot & 3u) && tape.n)       /* ((TAPE) its tape with it) */
+            ui_message("SAVED, NOT THE TAPE");
+        else
+            ui_message(UI_NEW ? "FULL PROJECT SAVED" : "SAVED");
         return 0;
     }
 #endif
@@ -1422,6 +1426,7 @@ static int project_save_as(uint32_t slot, const char *name)
     proj_name_get(proj_name, (const uint8_t *)p->name);
     proj_cur = (uint8_t)(slot & 3u);
     project_clean();
+    (void)tape_store_save(slot & 3u);
     ui_message("SAVED UNTIL POWER OFF");
     return 0;
 }
@@ -1609,6 +1614,7 @@ static void project_load(uint32_t slot)
         return;
     }
     if (!project_restore_runtime(&proj_scratch)) {
+        (void)tape_store_load(slot & 3u);               /* ((TAPE) its tape, or none) */
         proj_cur = (uint8_t)(slot & 3u);
         project_clean();
     }
@@ -1753,6 +1759,7 @@ static struct {
  * or NEW (SAVE > USER, SAVE > PROJECT) brings the autosave up to date within a second: the music as it is then comes
  * back at power-on. The user's own act, a flash write already: no wear to speak of */
 static void autosave_soon(void) { as.soon = 1; }
+static uint32_t as_tape __attribute__((section(".pool")));   /* ((TAPE) tape_store_sig of the tape the autosave holds) */
 
 static uint32_t as_mix(uint32_t h, const void *p, uint32_t n)   /* FNV-1a, continued */
 {
@@ -1787,6 +1794,8 @@ static uint32_t autosave_sig(void)
     h = as_mix(h, &motion, sizeof motion);
     h = as_mix(h, &lists, sizeof lists);              /* (phase 5) the lists, the patterns the tracks are on */
     h = as_mix(h, trk_pid, sizeof trk_pid);
+    i = tape_store_sig();                             /* ((TAPE) the tape: kept with the autosave) */
+    h = as_mix(h, &i, sizeof i);
     i = (ui_prefs & PREF_RESTORE_OFF) != 0;           /* (RESTORE LAST back ON: a round, the project written) */
     h = as_mix(h, &i, sizeof i);
     return as_mix(h, proj_name, sizeof proj_name);
@@ -1867,6 +1876,7 @@ static int project_erase(uint32_t slot)
     }
 #endif
     memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
+    tape_store_drop(slot);                              /* ((TAPE) its tape with it) */
     if (proj_cur == slot) {
         proj_cur = PROJ_NO_SLOT;
         pj_clean = autosave_sig() + 1u;
@@ -1924,6 +1934,7 @@ static void project_new(void)
         track_defaults_steps(t);
     }
     undo_depth--;
+    tape_reset();                                       /* ((TAPE) an empty tape) */
     proj_name[0] = 0;
     proj_cur = PROJ_NO_SLOT;
     project_clean();
@@ -1937,7 +1948,8 @@ static void project_new(void)
 static int autosave_quiet(void)
 {
     uint32_t k, i;
-    if (transport_busy() || fm1_in.notes || fm1_in.buttons)
+    if (transport_busy() || fm1_in.notes || fm1_in.buttons || design_on())   /* ((the new layout) a sound only tried
+                                                         * on a track: the track's own is what is kept, ui_design.c) */
         return 0;
     for (k = 0; k < NTRK; k++)
         for (i = 0; i < NVOICE; i++)
@@ -1993,6 +2005,10 @@ static void autosave_poll(void)
         if (as.err)
             return;
         as.writes++;
+        if (tape_store_sig() != as_tape) {              /* ((TAPE) the tape as it is, when it changed since) */
+            if (!tape_store_save(TS_AUTO))
+                as_tape = tape_store_sig();
+        }
     }
     as.saved = sig;
 #endif
@@ -2014,6 +2030,7 @@ static int autosave_boot(int allowed)
             if (!project_restore_runtime(&proj_scratch)) {
                 ui_message("RESTORED");
                 rc = 1;
+                (void)tape_store_load(TS_AUTO);         /* ((TAPE) the tape as it was) */
             }
         }
     }
@@ -2023,6 +2040,7 @@ static int autosave_boot(int allowed)
 #else
     (void)allowed;
 #endif
+    as_tape = tape_store_sig();
     as.saved = as.seen = autosave_sig();
     as.t = fm1_ms;
     project_mark_boot(rc);                              /* ((Skiff U3, A2) the project it is, changed or not) */

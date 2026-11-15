@@ -526,7 +526,12 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_SMIX,                    /* (Skiff, #21) EDIT > SAMPLES: a user sample's LEVEL, REVERB, DELAY (ui.c smx_zone) */
        GR_LMIX,                    /* (2.0, #36, the user's pick 1A) EDIT > LANE MIX: a kit's lane levels and pans */
        GR_FOLLOW,                  /* (2.1) SCL > FOLLOW: the chord it follows, as CHORD's (ui_graph.c graph_follow) */
-       GR_FXDLY, GR_FXREV };       /* (2.5) FX > DELAY, REVERB: the track's send beside the bus's own (page_desc) */
+       GR_FXDLY, GR_FXREV,         /* (2.5) FX > DELAY, REVERB: the track's send beside the bus's own (page_desc) */
+       GR_TAPE,                    /* SEQ > TAPE: what is played, kept as played (tape.c, ui_tape.c) */
+       GR_PSAVE, GR_SSAVE,         /* the new layout's SAVE > PROJECT and SOUND (ui_save2.c) */
+       GR_DSND, GR_DOSCA, GR_DOSCB, GR_DSUB, GR_DFLT };   /* .. the designer's (EDIT): SOUND, OSC A, OSC B, SUB + NOISE,
+                                     * FILTER (ui_design.c) */
+#define GR_DESIGN(g) ((uint32_t)(g) - GR_DSND <= (uint32_t)(GR_DFLT - GR_DSND))
 
 typedef struct {
     const char *title;
@@ -599,6 +604,15 @@ static const page_t PAGES[] = {
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},   /* (2.0) PRESETS: the track's DIR */
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},   /* 1.1.5's AUTO LIST: the locks and events */
     {"SONG", FAM_SEQ, SC_TRACK, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Skiff phase 5) the lists (ui_input.c song_knob) */
+    {"TAPE", FAM_SEQ, SC_TRACK, GR_TAPE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* the tape: LOOP END (ui_tape.c tape_knob); last, so
+                                                                       * every page before it keeps its place */
+    {"PROJECT SAVE", FAM_SAVE, SC_GLOBAL, GR_PSAVE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (the new layout: ui_save2.c) */
+    {"SOUND SAVE", FAM_SAVE, SC_GLOBAL, GR_SSAVE, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"SOUND", FAM_EDIT, SC_TRACK, GR_DSND, {0xFF, 0xFF, 0xFF, 0xFF}},    /* (the new layout) the designer: ui_design.c */
+    {"OSC A", FAM_EDIT, SC_TRACK, GR_DOSCA, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"OSC B", FAM_EDIT, SC_TRACK, GR_DOSCB, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"SUB NOISE", FAM_EDIT, SC_TRACK, GR_DSUB, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"FILTER", FAM_EDIT, SC_TRACK, GR_DFLT, {0xFF, 0xFF, 0xFF, 0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 /* (2.0, D 1A) the MOD page: the route KNOB 1 picks (0..10): the seven fixed routings (LFO DEST's and ENV DEST's of

@@ -42,7 +42,7 @@ static uint32_t home_sig(void)
         for (i = 0; i < n; i++)
             h = (h ^ (s[first + i].n | (uint32_t)s[first + i].hit << 8 | (uint32_t)s[first + i].time << 16)) * 16777619u;
     }
-    return h;
+    return h ^ tape_home_sig();                       /* ((TAPE) the lanes that show their tape) */
 }
 
 /* (Skiff U3, the review's N1; design/mock_u3.py, the user's pick A) every track at once: the selected one's lane as
@@ -58,6 +58,9 @@ static void graph_tracks(void)
     int six = (int32_t)NTRK * (HL_H + 3) - 3 > (int32_t)graph_h();
     int32_t y = six ? ((int32_t)graph_h() - (HL_H + ((int32_t)NTRK - 1) * (HL_C_H + 3))) / 2 : 0;
     cv_rect(0, 0, 240, (int32_t)graph_h(), T_BG);      /* (over the panel: the lanes are its tiles) */
+    uint16_t tcnt[NTRK];                              /* ((TAPE) the notes each track has on the tape) */
+    int taped = 0;
+    tape_counts(tcnt);
     for (k = 0; k < NTRK; k++) {
         const track_t *t = &trk[k];
         const step_t *s = t->step;
@@ -103,6 +106,12 @@ static void graph_tracks(void)
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "home compact lane name on its middle");
             cv_free_text(HL_NAME_X, y + CAP_IN(S, HL_C_H), &AF_S, name[0] ? name : "--", muted ? T_DIM : T_TEXT, lane,
                          HL_STEP_X - 4 - HL_NAME_X);
+        }
+        tape_hl[k].ch = 0;
+        if (tape_home_row(k, tcnt)) {                 /* ((TAPE) the track's tape where its 16 cells were: ui_tape_gr.c) */
+            tape_home_strip(k, y, h, ch, on, off, ib);
+            taped = 1;
+            n = 0;
         }
         for (i = 0; i < n; i++) {                     /* (past the track's length: nothing) */
             const step_t *st = &s[first + i];
@@ -165,6 +174,8 @@ static void graph_tracks(void)
         }
         y += h + 3;
     }
+    if (taped)
+        tape_home_notes();
     if (ux.crypt && tx >= 0)                          /* (Skiff C3) CRYPT: a torch on it, flickering a step to the next */
         cr_torch(tx, ty, ui.frame / 6u, 2);
     if (ux.quark && qx >= 0)                          /* (Skiff Q3) QUARK: its tracks a new way each step */

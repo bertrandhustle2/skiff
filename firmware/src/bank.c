@@ -728,6 +728,7 @@ static uint32_t ms_put(motion_store_t *ms, const track_t *t, uint32_t step, uint
     ms->on |= (uint8_t)(1u << trk_index(t));
     return 0;
 }
+#if !FELUCCA_NEWUI                                    /* ((the new layout alone) no TAKES: take.c) */
 /* .. a TAKE on a chain (ui_take.c take_commit): pass `pass` of track k's log into its part j (not the one it is on), as
  * take_commit puts one into the track: an undo copy of the part first (SAVE held on that part puts it back), its record
  * then waiting to be kept, the copy staged to come in the same; its notes and knob moves counted on (*full: a move
@@ -781,6 +782,7 @@ static __attribute__((noinline)) void take_part(uint32_t k, uint32_t j, uint32_t
     *moves += mm;
     bk.gen++;
 }
+#endif
 static void rec_motion_of(uint8_t *r, uint32_t id)  /* pattern id's stored automation into record r (motion_lost) */
 {
     if (!pat_read(id, bk_buf)) {

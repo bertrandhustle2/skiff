@@ -381,6 +381,7 @@ static __attribute__((noinline)) uint32_t seq_next(track_t *t, uint32_t len)
     return n;
 }
 
+#include "tape.c"                                   /* TAPE: what is played, kept as played (take_note hands it over) */
 #include "take.c"                                   /* Skiff: TAKES' log (input_on/off, the arp, motion_capture) */
 static volatile uint8_t seq_fill;                   /* Skiff: FILL held (GLO + F4, ui_layer.c): the FILL steps play */
 /* Skiff: step s of track t passes its trig condition (core.h TC_*) on this pass of the track's loop (take_pass: the
@@ -927,7 +928,7 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
     last_hits++;
     if (cin_left)
         cin_keep(t, note, vel);
-    if (rec_on(t) && !arp)                          /* (ARP on: arp_tick records its notes) */
+    if (rec_on(t) && !arp && !tape.rec)             /* (ARP on: arp_tick records its notes; (TAPE) recording: its) */
         rec_note(t, note, vel);
     else if (!arp)
         take_note(t, note, vel);                    /* (Skiff) not recorded: TAKES' log (take.c) */
@@ -1230,6 +1231,7 @@ static void seq_start(void)
     }
     motion_begin();
     take_clear();                                  /* (Skiff) TAKES: a new log from PLAY */
+    tape_start();                                  /* (TAPE) the tape from its start, with the patterns */
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
         track_t *t = &trk[i];
         t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
@@ -1327,6 +1329,7 @@ static void seq_stop(void)
 {
     uint32_t i;
     song.playing = 0;
+    tape_stop();                                   /* (TAPE) its notes end, a take ends */
     free_stop();                                   /* ((2.5) take.c: what is played from now: a free take */
     thr_out = 0;                                   /* (Skiff) the throws back at once (throw.c) */
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
@@ -2108,6 +2111,7 @@ static __attribute__((noinline)) void events_block(uint32_t n)
         seq_audition();                               /* ((1.3) STEP PREVIEW: a step sounds, stopped) */
     for (i = 0, ord = fol_order(); i < NTRK; i++, ord >>= 4)   /* ((2.1) the tracks followed first: follow.c) */
         seq_tick(&trk[ord & 15u], seq_n);
+    tape_block(n);                                    /* (TAPE) its notes of this block, in real time */
     if (cin_flush)
         cin_record();
     if (song.playing)

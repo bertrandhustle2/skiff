@@ -814,6 +814,12 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_INS_FILTER, S_INS_FILTER_HP,                                                         /* (2.5, 6B) */
        S_CHORD_STRUM, S_CHORD_STRUM_ALT,                                                      /* (2.5, 7B) */
        S_SHIFT_SONG, S_HINT_FREE,                                                             /* (2.5) */
+       S_TAPE_EMPTY, S_TAPE, S_TAPE_REC, S_TAPE_FIRST, S_TAPE_FULL, S_SHIFT_TAPE,             /* (TAPE) */
+       S_HOME_TAPE_EMPTY, S_HOME_TAPE, S_HOME_TAPE_REC, S_HOME_TAPE_ARMED, S_HOME_TAPE_STEPS,   /* (TAPE) HOME, REC TO TAPE */
+       S_EDIT_WAVE, S_EDIT_WAVE_GROWL, S_EDIT_WAVE_FLT, S_EDIT_WAVE_NEW,                        /* (WAVE) */
+       S_SAVE_PROJECT, S_SAVE_PROJECT_USED, S_SAVE_PROJECT_NEW, S_SAVE_SOUND, S_SAVE_SOUND_USED,   /* (the new layout's SAVE) */
+       S_DESIGN_SND, S_DESIGN_A, S_DESIGN_A_HOT, S_DESIGN_A2, S_DESIGN_B, S_DESIGN_B2, S_DESIGN_SUB, S_DESIGN_FLT,
+       S_DESIGN_FLT2, S_DESIGN_FLT3, S_DESIGN_OWN, S_DESIGN_FX, S_DESIGN_ENV, S_FX_LIST,           /* (.. its designer, the moved pages) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "project", "lanes", "step", "pattern", "chance", "motion", "drum",
@@ -849,7 +855,10 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "song_sound", "song_sounds", "song_chains", "song_chain_copy", "drum_kit_usr", "lanes_usr",
     "follow", "follow_scale", "follow_fit", "follow_off", "follow_wait", "free_take", "free_take_turned", "dly_mono", "dly_ping", "fx_delay", "fx_reverb", "fx_sends", "pattern_64", "song_strip", "project_new",
     "project_clear", "confirm_clear_song", "confirm_clear_trks", "insert_filter", "insert_filter_hp", "chord_strum",
-    "chord_strum_alt", "shift_song", "hint_free_take", "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
+    "chord_strum_alt", "shift_song", "hint_free_take",
+    "tape_empty", "tape", "tape_rec", "tape_first", "tape_full", "shift_tape", "home_tape_empty", "home_tape", "home_tape_rec",
+    "home_tape_armed", "home_tape_steps", "edit_wave", "edit_wave_growl", "edit_wave_flt", "edit_wave_new", "save_project", "save_project_used", "save_project_new", "save_sound", "save_sound_used", "design_sound", "design_a", "design_a_hot", "design_a2", "design_b", "design_b2", "design_sub", "design_flt",
+    "design_flt2", "design_flt3", "design_own", "design_fx", "design_env", "fx_list", "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
 /* the scenes of the UI design screens: the state the UI-redesign
  * prototype drew them from (its setup(): two pattern tracks, the drum pattern on track 4, a synthetic scope),
@@ -1221,6 +1230,186 @@ static void setup(int s)
         else if (s == S_SHIFT_SONG) { song_lists(0); go_page(GR_SONG); }
         else ui.home = 1;
         ui.shift = 1;
+        break;
+    case S_TAPE_EMPTY:                               /* (TAPE) SEQ > TAPE: nothing yet; a song of four layers, LOOP on; */
+    case S_TAPE:                                     /* a take being recorded over it; a first take, no end yet; the */
+    case S_TAPE_REC:                                 /* pool full; SHIFT's map there */
+    case S_TAPE_FIRST:
+    case S_TAPE_FULL:
+    case S_HOME_TAPE_EMPTY:                          /* HOME, REC TO TAPE: nothing yet; the song; a take being recorded; */
+    case S_HOME_TAPE:                                /* armed, waiting for a key; REC TO STEPS with that song on the tape */
+    case S_HOME_TAPE_REC:                            /* (its tracks' lanes the tape, the others' their cells) */
+    case S_HOME_TAPE_ARMED:
+    case S_HOME_TAPE_STEPS:
+    case S_SHIFT_TAPE: {
+        int home = s == S_HOME_TAPE_EMPTY || s == S_HOME_TAPE || s == S_HOME_TAPE_REC || s == S_HOME_TAPE_ARMED ||
+                   s == S_HOME_TAPE_STEPS;
+        uint32_t i, n = s == S_TAPE_EMPTY || s == S_HOME_TAPE_EMPTY || s == S_HOME_TAPE_ARMED ? 0u : s == S_TAPE_FIRST ? 14u :
+                        s == S_TAPE_FULL ? TAPE_NOTES : 120u;
+        uint32_t len = 30u * 44100u, sd = 12345u;
+        for (i = 0; i < n; i++) {                    /* (in the order of time: one run) */
+            uint32_t k = s == S_TAPE_FIRST ? 2u : i % 4u == 3u ? 4u : i % 4u;
+            sd = sd * 1664525u + 1013904223u;
+            tape_nt[i].st = (uint32_t)((uint64_t)i * (s == S_TAPE_FIRST ? 11u * 44100u : len - 8000u) / n) | k << 28;
+            tape_nt[i].len = (uint16_t)(20u + (sd >> 20) % 400u);
+            tape_nt[i].note = (uint8_t)(36u + k * 9u + (sd >> 8) % 20u);
+            tape_nt[i].vel = 100;
+        }
+        tape.n = (uint16_t)n;
+        tape.nrun = n ? 1u : 0u;
+        tape_rn[0].first = 0; tape_rn[0].n = (uint16_t)n; tape_rn[0].cur = 0;
+        tape.len = !n || s == S_TAPE_FIRST ? 0u : len;
+        tape.pos = !n || s == S_HOME_TAPE || s == S_HOME_TAPE_STEPS ? 0u : s == S_TAPE_FIRST ? 12u * 44100u : 8u * 44100u + 1234u;
+        tape.loop = s == S_TAPE || s == S_TAPE_REC;
+        if (s == S_TAPE_REC || s == S_TAPE_FIRST || s == S_HOME_TAPE_REC) {
+            tape.rec = tape.run = 1;
+            song.playing = 1;
+        }
+        if (s == S_HOME_TAPE_ARMED)
+            tape.rec = 1;
+        if (s == S_TAPE_FULL)
+            tape.full = TF_NOTES;
+        tape.gen++;
+        sel_set(s == S_TAPE_FIRST ? 2 : 1);
+        if (home) {
+            tape.to_pat = s == S_HOME_TAPE_STEPS;
+            go_home();
+        } else
+            go_page(GR_TAPE);
+        ui.shift = s == S_SHIFT_TAPE;
+        break;
+    }
+    case S_EDIT_WAVE:                                /* (WAVE) Skiff's own EDIT > OSC: A's BASIC, POS in the middle; GROWL, */
+    case S_EDIT_WAVE_GROWL:                          /* POS near its end; EDIT > FLT; OSC with nothing built yet */
+    case S_EDIT_WAVE_FLT:
+    case S_EDIT_WAVE_NEW: {
+        wv_part_t *P;
+        uint32_t i;
+        eng(ENGI_WAVE);
+        TSEL->engine = ENGI_WAVE;
+        P = wv_of(TSEL);
+        memset(P, 0, sizeof *P);
+        TSEL->p[P_E0] = (int16_t)WVT(s == S_EDIT_WAVE_GROWL ? 4 : 0, 1);
+        TSEL->p[P_E1] = s == S_EDIT_WAVE_GROWL ? 100 : 58;
+        TSEL->p[P_E4] = 84;
+        TSEL->p[P_E5] = 40;
+        for (i = 0; s != S_EDIT_WAVE_NEW && i < 4000u && (!P->live || P->stage < WV_NL || P->table[1] != 1u); i++)
+            wave_block(TSEL);
+        go_title(s == S_EDIT_WAVE_FLT ? "EDIT 2" : "EDIT 1");
+        break;
+    }
+    case S_DESIGN_SND:                               /* (the new layout) EDIT on a PIANO track: the designer's sound tried */
+    case S_DESIGN_A:                                 /* there: SOUND (both waves); OSC A, a knob turned (its words on the */
+    case S_DESIGN_A_HOT:                             /* strip), its pitch row; OSC B's two; SUB NOISE; FILTER's three rows; */
+    case S_DESIGN_A2:                                /* on a WAVE track of its own; an FM6 track's OPERATOR under FX; an */
+    case S_DESIGN_B:                                 /* ANALOG track's FLT under ENV */
+    case S_DESIGN_B2:
+    case S_DESIGN_SUB:
+    case S_DESIGN_FLT:
+    case S_DESIGN_FLT2:
+    case S_DESIGN_FLT3:
+    case S_DESIGN_OWN:
+    case S_DESIGN_FX:
+    case S_DESIGN_ENV: {
+        wv_part_t *P;
+        uint32_t i, g;
+        song.playing = 0;
+        tape.to_pat = 0;
+        ui.msg_t = 0;
+        if (s == S_DESIGN_FX) {
+            eng(ENGI_FM6);
+            go_page(GR_FMOP);
+            break;
+        }
+        if (s == S_DESIGN_ENV) {
+            eng(0);
+            go_title("EDIT 2");
+            break;
+        }
+        sel_set(2);
+        if (s == S_DESIGN_OWN) {
+            eng(ENGI_WAVE);
+            apply_preset(8);
+        } else {
+            design_tap();
+        }
+        TSEL->engine = ENGI_WAVE;                    /* (as the audio's engine switch leaves it) */
+        P = wv_of(TSEL);
+        memset(P, 0, sizeof *P);
+        if (s != S_DESIGN_OWN) {
+            TSEL->p[P_E0] = (int16_t)WVT(4, 3);
+            TSEL->p[P_E1] = 44;
+            TSEL->p[P_E2] = 96;
+            TSEL->p[P_E3] = 70;
+            TSEL->p[P_E4] = 84;
+            TSEL->p[P_E5] = 40;
+            TSEL->p[P_E6] = 46;
+            TSEL->p[P_E7] = 36;
+            TSEL->p[WX(WX_ALVL)] = 110;
+            TSEL->p[WX(WX_BLVL)] = 90;
+            TSEL->p[WX(WX_AWARP)] = (int16_t)WVA(WK_BENDP, 0);
+            TSEL->p[WX(WX_BWARP)] = (int16_t)WVA(WK_OFF, 1);
+            TSEL->p[WX(WX_BSEMI)] = 19;
+            TSEL->p[WX(WX_BFINE)] = 72;
+            TSEL->p[WX(WX_ATHICK)] = 80;
+            TSEL->p[WX(WX_NLVL)] = 60;
+            TSEL->p[WX(WX_NCOL)] = 50;
+            TSEL->p[WX(WX_SUBK)] = WS_TRI;
+            TSEL->p[WX(WX_FLT)] = (int16_t)WVF(s == S_DESIGN_FLT3 ? WF_BAND : WF_LOW24, WR_A | WR_B | WR_NOISE);
+        }
+        for (i = 0; i < 4000u && (!P->live || P->stage < WV_NL || P->table[1] != wv_tab(TSEL->p, 1)); i++)
+            wave_block(TSEL);
+        ui.msg_t = 0;
+        ui.msg2[0] = 0;
+        g = s == S_DESIGN_SND ? GR_DSND : s == S_DESIGN_B || s == S_DESIGN_B2 ? GR_DOSCB : s == S_DESIGN_SUB ? GR_DSUB :
+            s == S_DESIGN_FLT || s == S_DESIGN_FLT2 || s == S_DESIGN_FLT3 ? GR_DFLT : GR_DOSCA;
+        go_page(g);
+        ds.win[g - GR_DSND] = (uint8_t)(s == S_DESIGN_A2 || s == S_DESIGN_B2 || s == S_DESIGN_FLT2 ? 1 : s == S_DESIGN_FLT3 ? 2 : 0);
+        ds.last = 0;
+        if (s == S_DESIGN_A_HOT) {                   /* (KNOB 2, WARP, turned last) */
+            ds.last = 2;
+            ds.at = (uint8_t)(1u + design_row());
+        }
+        break;
+    }
+    case S_FX_LIST:                                  /* (the new layout) FX: the track's effects, a list: DRIVE, DELAY, */
+        song.playing = 0;                            /* REVERB and the INSERT on, the others off */
+        tape.to_pat = 0;
+        ui.msg_t = 0;
+        TSEL->p[P_DIST] = 40;
+        TSEL->p[P_DTYPE] = 2;
+        TSEL->p[P_CHOR] = 0;
+        TSEL->p[P_DLY] = 70;
+        TSEL->p[P_REV] = 55;
+        TSEL->p[P_ITYPE] = 3;
+        go_page(GR_FX);
+        break;
+    case S_SAVE_PROJECT:                             /* (the new layout) SAVE > PROJECT: nothing kept; B kept, picked; */
+    case S_SAVE_PROJECT_USED:                        /* SAVE > SOUND: no slot used; two used, one of them picked */
+    case S_SAVE_PROJECT_NEW:
+    case S_SAVE_SOUND:
+    case S_SAVE_SOUND_USED:
+        song.playing = 0;
+        tape.to_pat = 0;
+        if (s == S_SAVE_PROJECT_USED) {
+            project_save_as(3, "DEMO 2");
+            project_save_as(1, "NIGHT DRIVE");
+        }
+        if (s == S_SAVE_SOUND_USED) {
+            up_store(3, "MY LONG BASS");
+            up_store(4, "PAD");
+            ui.uslot = 3;
+            sel_set(2);
+        }
+        ui.msg_t = 0;
+        fm1_ms += 600u;                              /* (the slots' names are looked up twice a second) */
+        go_page(s == S_SAVE_PROJECT || s == S_SAVE_PROJECT_USED || s == S_SAVE_PROJECT_NEW ? GR_PSAVE : GR_SSAVE);
+        if (s == S_SAVE_SOUND_USED)
+            ui.uslot = 3;                            /* (KNOB 2 turned onto a used one) */
+        if (s == S_SAVE_PROJECT_USED)
+            psave_row = 1;                           /* (KNOB 1 onto B) */
+        if (s == S_SAVE_PROJECT_NEW)
+            psave_row = 4;                           /* (.. onto NEW) */
         break;
     case S_HINT_FREE: go_home(); ui_message("SHIFT + SAVE: FREE TAKE"); ui.msg_t = 130; break;   /* ((2.5) once, free_hint) */
     case S_VOICE: go_title("VOICE"); break;
@@ -2336,7 +2525,8 @@ int main(int argc, char **argv)
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
     char path[600];
     uint32_t p, s;
-    static const char *const SHOW[] = {"SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK"};   /* ((Skiff, R1) THEME's) */
+    static const char *const SHOW[] = {"SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK", "TAPE", "PEA", "CANDY"};   /* ((Skiff, R1)
+                                                      * THEME's; (TAPE build) three more) */
     snprintf(path, sizeof path, "%s/report.txt", out);
     rep = fopen(path, "w");
     if (!rep) { fprintf(stderr, "cannot write %s\n", path); return 1; }

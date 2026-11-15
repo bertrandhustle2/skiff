@@ -213,7 +213,8 @@ static int preferences(void)
         host_wire[n - 9 - 13] == 0x52 && host_wire[n - 9 - 12] == 1 && host_wire[n - 9 - 11] == 4 &&   /* RATCH */
         host_wire[n - 9 - 10] == 0x4C && host_wire[n - 9 - 9] == 1 && host_wire[n - 9 - 8] == 1 &&   /* 1.1 parameter locks */
         host_wire[n - 9 - 7] == 0x54 && host_wire[n - 9 - 6] == 1 && host_wire[n - 9 - 5] == 0x30 &&  /* (Skiff phase 6) T5, T6 */
-        host_wire[n - 9 - 4] == 0 && host_wire[n - 9 - 3] == 6 && host_wire[n - 9 - 2] == 0 &&         /* light: no GRAIN, PHYS */
+        host_wire[n - 9 - 4] == 0 && host_wire[n - 9 - 3] == 6 && host_wire[n - 9 - 2] == 2 &&         /* light: no GRAIN, PHYS;
+                                                                                                    * (WAVE) nor engine 15 */
         host_wire[n - 10] == 0x43 && host_wire[n - 9] == 1 && host_wire[n - 8] == TC_COUNT &&
         host_wire[n - 7] == 0x4B && host_wire[n - 6] == 1 && host_wire[n - 5] == 8 &&    /* (Skiff W3) the kit, */
         host_wire[n - 4] == 0x57 && host_wire[n - 3] == 1 && host_wire[n - 2] == 127);   /* TRANSPORT .. PERFORM, (#21) SMP_MIX, (2.0) ties */   /* (Skiff W1) the step's FLAM
@@ -1594,12 +1595,13 @@ static int custom_colors(void)
          menu_n(MI_COLOR) == NPALETTES + 1u;
     a[1] = NPALETTES; request(ED_UI_SET, a, 2);             /* CUSTOM again: in its look */
     ok &= host_wire[5] == 3 && settings.palette == UI_NEON_INDEX && cpal_on() && tokens_are(CC) && ux.neon;
-    menu_put(MI_COLOR, UI_QUARK_INDEX);                     /* the MENU's THEME: QUARK, then a step on is CUSTOM */
-    ok &= settings.palette == UI_QUARK_INDEX && tokens_builtin(UI_QUARK_INDEX) && menu_step(MI_COLOR, 1) == NPALETTES;
+    menu_put(MI_COLOR, NPALETTES - 1u);                     /* the MENU's THEME: the last one ((TAPE build) CANDY, QUARK before),
+                                                             * then a step on is CUSTOM */
+    ok &= settings.palette == NPALETTES - 1u && tokens_builtin(NPALETTES - 1u) && menu_step(MI_COLOR, 1) == NPALETTES;
     menu_put(MI_COLOR, menu_step(MI_COLOR, 1));
     ok &= cpal_on() && settings.palette == UI_NEON_INDEX && tokens_are(CC) && menu_step(MI_COLOR, 1) == 0u &&
-          menu_step(MI_COLOR, -1) == UI_QUARK_INDEX;
-    bad += check("(#27) THEME: CUSTOM and back by UI_SET and the MENU (it wraps round seven), the set kept, CUSTOM in its look", ok);
+          menu_step(MI_COLOR, -1) == NPALETTES - 1u;
+    bad += check("(#27) THEME: CUSTOM and back by UI_SET and the MENU (it wraps round them all), the set kept, CUSTOM in its look", ok);
 
     for (i = 0; i < CPAL_N; i++) bad_c[i] = (uint16_t)~CC[i];
     ok = colors_req(1, 0, bad_c, 1) == 1 && colors_req(1, 0, bad_c, 2 + 26 - 1) == 1 &&

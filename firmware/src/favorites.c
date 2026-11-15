@@ -11,12 +11,13 @@ static int favorite_has(uint32_t engine, uint32_t preset)
 {
     if (engine == NENGINES)
         return preset < UP_SLOTS && ((favorites.user >> preset) & 1u);
-    return engine < NENGINES && engine < 16u && preset < 256u &&
+    return engine < NENGINES && engine < 15u && preset < 256u &&   /* (row 15 holds Skiff's settings: WAVE, engine 15, has
+                                                                    * no favourites yet) */
         ((favorites.factory[engine][preset / 8u] >> (preset % 8u)) & 1u);
 }
 static int favorite_set(uint32_t engine, uint32_t preset, int on)
 {
-    if (engine > NENGINES || (engine == NENGINES ? preset >= UP_SLOTS : engine >= 16u || preset >= 256u))
+    if (engine > NENGINES || (engine == NENGINES ? preset >= UP_SLOTS : engine >= 15u || preset >= 256u))
         return 0;
     if (favorite_has(engine, preset) == !!on) return 0;
     if (engine == NENGINES) {

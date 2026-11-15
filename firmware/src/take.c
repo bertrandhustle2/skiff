@@ -6,6 +6,24 @@
  * notes as REC records them (rec_put), a held note tied on, the knob moves as automation; one undo (SAVE held).
  * Included by seq.c (before motion.c: motion_capture logs the knobs). take_note runs in the audio ISR (the keys, MIDI
  * and the arp play there), take_knob in the main loop; each entry is written whole before its count is published. */
+#if FELUCCA_NEWUI
+/* (the new layout alone, tape.c FELUCCA_NEWUI: the unit's build) no TAKES and no FREE TAKES: the tape is the recorder,
+ * and their logs' room (4.6 KiB) and code are the tape's and the designer's. The passes stay (launch.c counts a song's
+ * repeats by them); take_note only hands the tape what is played */
+static volatile uint16_t take_pass[NTRK];
+static volatile uint16_t take_lost[NTRK];
+static uint16_t take_p0[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t free_hold;
+static void free_stop(void) {}
+static void take_clear(void)
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++)
+        take_pass[k] = take_lost[k] = take_p0[k] = 0;
+}
+static __attribute__((noinline)) void take_note(track_t *t, uint32_t note, uint32_t vel) { (void)tape_rec_note(t, note, vel); }
+static void take_knob(track_t *t, uint32_t id, int16_t value) { (void)t; (void)id; (void)value; }
+#else
 #define TAKE_EV 256u                                  /* notes on and off: ~128 notes, the oldest overwritten */
 #define TAKE_KV 64u                                   /* knob moves (one per pass, step and parameter) */
 #define TAKE_LAT 0u                                   /* samples a stamp is moved back (the key's way to the ISR):
@@ -82,6 +100,8 @@ static __attribute__((noinline)) void take_note(track_t *t, uint32_t note, uint3
 {
     uint32_t pass, step, i;
     int32_t feel;
+    if (tape_rec_note(t, note, vel))                  /* (TAPE) recording: the tape's, as played */
+        return;
     if (!song.playing) {
         free_note(t, note, vel);                      /* ((2.5) stopped: a free take's) */
         return;
@@ -123,3 +143,4 @@ static void take_knob(track_t *t, uint32_t id, int16_t value)
     take_kv[i].param = (uint8_t)id;
     take_kv[i].value = value;
 }
+#endif /* FELUCCA_NEWUI */

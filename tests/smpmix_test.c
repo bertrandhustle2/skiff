@@ -255,32 +255,32 @@ static int drumkit_test(void)
     uint32_t kick, kick_up, kick_short, snare, bell, oh, oh_cut, muted, empty, std, i;
     int has = 1;
     voice_t *v;
-    kit_put(2);
-    memset((uint8_t *)host_slots + 1u * SMP_USER_SIZE, 0xFF, SMP_USER_SIZE);   /* (USR2 empty) */
+    kit_put(1);                                           /* ((TAPE) USR2: the FM-1 has two user slots) */
+    memset((uint8_t *)host_slots + 0u * SMP_USER_SIZE, 0xFF, SMP_USER_SIZE);   /* (USR1 empty) */
+    smp_user_scan(0);
     smp_user_scan(1);
-    smp_user_scan(2);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     kick = kit_blocks(t, 36, 400, 0, 0);
-    snare = kit_blocks(kit_track(DK_USR3), 38, 400, 0, 0);
-    bell = kit_blocks(kit_track(DK_USR3), 56, 400, 0, 0);
-    check("(#35) KIT USR3: KICK and SNARE their samples to their ends, BELL (none) silent",
+    snare = kit_blocks(kit_track(DK_USR2), 38, 400, 0, 0);
+    bell = kit_blocks(kit_track(DK_USR2), 56, 400, 0, 0);
+    check("(#35) KIT USR2: KICK and SNARE their samples to their ends, BELL (none) silent",
           kick + 2u >= 4000u / CTL && kick <= 4000u / CTL + 2u && snare + 2u >= 400u / CTL && snare <= 400u / CTL + 2u && !bell,
           "%u %u %u blocks", kick, snare, bell);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     t->p[P_LTUNE0] = 127;                                /* (KICK's TUNE: +11.8 semitones, about twice as fast) */
     kick_up = kit_blocks(t, 36, 400, 0, 0);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     t->p[P_LDECAY0] = -40;                               /* (KICK's DECAY below its middle: a fall) */
     kick_short = kit_blocks(t, 36, 400, 0, 0);
     check("  TUNE up: faster (half as long); the lane's DECAY down: shorter", kick_up * 2u <= kick + 4u &&
           kick_up * 2u + 4u >= kick && kick_short < kick / 2u, "%u %u of %u", kick_up, kick_short, kick);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     oh = kit_blocks(t, 46, 400, 0, 0);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     oh_cut = kit_blocks(t, 46, 400, 42, 10);
     check("  the closed hat chokes the open one", oh >= 6000u / CTL - 2u && oh_cut < 10u + 600u / CTL + 4u,
           "%u, %u with CL HAT at 10", oh, oh_cut);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     drum_mute[0] = 1u << 0;                              /* (KICK muted) */
     trk_note_on(t, 36, 100);
     {
@@ -291,15 +291,15 @@ static int drumkit_test(void)
     v = drum_reuse(t, 36);
     muted = kit_blocks(t, 36, 20, 0, 0);
     check("  a muted lane rings on unheard (its voice playing)", !muted && v && v->active && !v->s[6], "%u", muted);
-    empty = kit_blocks(kit_track(DK_USR2), 36, 100, 0, 0);
+    empty = kit_blocks(kit_track(DK_USR1), 36, 100, 0, 0);
     std = kit_blocks(kit_track(DK_STD), 36, 100, 0, 0);
-    t = kit_track(DK_USR3);
+    t = kit_track(DK_USR2);
     for (i = 0; i < 7u; i++)
         has &= drum_lane_has(t, i);
     has &= !drum_lane_has(t, 7);
     t->p[P_E0] = DK_STD;
     has &= drum_lane_has(t, 7);
-    check("  an empty slot (USR2): silent; STD after: its own KICK; LANES: BELL without a sample", !empty && std > 0 && has,
+    check("  an empty slot (USR1): silent; STD after: its own KICK; LANES: BELL without a sample", !empty && std > 0 && has,
           "%u %u", empty, std);
     memset(drum_mute, 0, sizeof drum_mute);
     return 0;
@@ -343,21 +343,21 @@ static void ima_enc(const int16_t *x, uint32_t n, uint8_t *out)
 static int drumkit_retrig_test(void)
 {
     static int16_t x[4000];
-    uint8_t *b = (uint8_t *)host_slots + 2u * SMP_USER_SIZE;
+    uint8_t *b = (uint8_t *)host_slots + 1u * SMP_USER_SIZE;
     smp_user_hdr_t h;
     track_t *t;
     voice_t *v = 0;
     int32_t prev = 0, step0 = 0, step1 = 0, step2 = 0;
     uint32_t i, k, n2 = 0, pos = 0;
-    kit_put(2);
+    kit_put(1);
     for (i = 0; i < 4000u; i++)
         x[i] = (int16_t)(20000.0 * sin(i * 2.0 * 3.14159265 * 110.0 / 22050.0) * exp(-(double)i / 2500.0));
     memcpy(&h, b, sizeof h);
     ima_enc(x, 4000u, b + SMP_USER_DATA + h.zone[0].off);
     h.crc = st_crc32(b + SMP_USER_DATA, h.data_len);
     memcpy(b, &h, sizeof h);
-    smp_user_scan(2);
-    t = kit_track(DK_USR3);
+    smp_user_scan(1);
+    t = kit_track(DK_USR2);
     trk_note_on(t, 36, 100);
     for (k = 0; k < 400u; k++) {
         int32_t o[2 * CTL];
