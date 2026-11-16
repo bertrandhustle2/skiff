@@ -1,10 +1,16 @@
-# Builds the FM-1 install file (.fwsc) on GitHub's servers when a tag such as v2.6 is pushed, with the shared FM-1
-# build workflow (github.com/zvenson/fm1-build): it fetches the chip maker's compiler and kit, runs this
-# repository's own build, and attaches the package to the tag's release.
+# Builds the FM-1 install file (.fwsc) on GitHub's servers with the shared FM-1 build workflow
+# (github.com/zvenson/fm1-build): it fetches the chip maker's compiler and kit and runs this repository's own build.
+#
+# Two ways in:
+#   - a tag such as v2.6 is pushed: the package is attached to the tag's release (the shared workflow does that);
+#   - the file RELEASE_NAME changes on the branch claude/tape: the package is built under the name in that file and
+#     kept on the branch "builds" (one commit, replaced each time), where the installer page's update takes it from.
 name: release
 on:
   push:
     tags: ['v*']
+    branches: ['claude/tape']
+    paths: ['RELEASE_NAME']
 jobs:
   build:
     uses: zvenson/fm1-build/.github/workflows/build.yml@v1
@@ -14,5 +20,33 @@ jobs:
       attestations: write
     with:
       # (the icon step needs fontTools; the shared workflow installs Pillow only)
-      build: python3 -m pip install fonttools==4.67.0 && ./build.sh --release "${GITHUB_REF_NAME#v}"
+      build: python3 -m pip install fonttools==4.67.0 && ./build.sh --release "$(if [ "$GITHUB_REF_TYPE" = tag ]; then echo "${GITHUB_REF_NAME#v}"; else tr -d ' \r\n' < RELEASE_NAME; fi)"
       packages: build/*.fwsc
+  keep:
+    # (a branch build has no release to hold the package)
+    if: github.ref_type == 'branch'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: The package, onto the branch "builds"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n packages -D out
+          mkdir b
+          find out -name '*.fwsc' -exec cp {} b/ \;
+          cp "$(find out -name SHA256SUMS | head -1)" b/SHA256SUMS
+          ls -l b
+          cd b
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan builds
+          git add -A
+          git commit -q -m "$(ls *.fwsc | head -1), built from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" builds
