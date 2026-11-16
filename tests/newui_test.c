@@ -383,6 +383,78 @@ static int test_themes(void)
     menu_put(MI_COLOR, 0);
     return bad;
 }
+/* (OP DREAM 1.2.1) WAVE A's family picked on the designer's first page: once it is built, the picture is that family's.
+ * (It stayed the older one's: a table built over another changes none of the ready bits, so nothing the picture's
+ * signature held changed after the redraw at its beginning. The audio's block loop builds the tables: eng_wave.c
+ * wave_block, called here as the engine's block is.) */
+static uint32_t rows_sum(uint32_t y0, uint32_t y1)
+{
+    uint32_t h = 2166136261u, i;
+    for (i = y0 * 240u; i < y1 * 240u; i++)
+        h = (h ^ host_screen[i]) * 16777619u;
+    return h;
+}
+static void wv_run(uint32_t frames)
+{
+    uint32_t i, k;
+    for (i = 0; i < frames; i++) {
+        for (k = 0; k < 46u; k++)
+            wave_block(&trk[0]);
+        block();
+        frame();
+    }
+}
+static int test_wave_pic(void)
+{
+    int bad = 0;
+    uint32_t saw, left, again, ok;
+    const wv_part_t *P;
+    new_layout();
+    press(B_EDIT);
+    wv_run(40);
+    btn_down(B_HOME);
+    frame();
+    press(B_EDIT);                                   /* the plain saw: BASIC at its end */
+    btn_up(B_HOME);
+    wv_run(60);
+    P = wv_of(&trk[0]);
+    saw = rows_sum(92, 158);                         /* (the two waves' boxes) */
+    ok = P && P->table[0] == 0u && P->stage >= WV_NL && cur_graph() == GR_DSND;
+    turn(EN_K1, 7);                                  /* WAVE A: up to ORGAN */
+    wv_run(90);
+    left = rows_sum(92, 158);
+    ok &= wv_tab(trk[0].p, 0) == 7u && P->table[0] == 7u && P->stage >= WV_NL;
+    turn(EN_K3, -1);                                 /* (anything else changed: the page drawn again) */
+    wv_run(4);
+    turn(EN_K3, 1);
+    wv_run(8);
+    again = rows_sum(92, 158);
+    bad += check("WAVE A turned to ORGAN: its picture is ORGAN's once built (not the saw's still), the one a redraw gives",
+                 ok && left != saw && again == left);
+    turn(EN_K2, 4);                                  /* WAVE B likewise (B's level 0: its picture is drawn all the same) */
+    wv_run(90);
+    left = rows_sum(92, 158);
+    turn(EN_K3, -1);
+    wv_run(4);
+    turn(EN_K3, 1);
+    wv_run(8);
+    bad += check("WAVE B turned: its picture too", P->table[1] == wv_tab(trk[0].p, 1) && P->table[1] == 4u && left != again &&
+                 rows_sum(92, 158) == left);
+    turn(EN_PRESET, 3);                              /* another of WAVE's sounds: both pictures its own once built */
+    wv_run(120);
+    left = rows_sum(92, 158);
+    ok = P->table[0] == wv_tab(trk[0].p, 0) && P->table[1] == wv_tab(trk[0].p, 1) && P->stage >= WV_NL;
+    press(B_EDIT);                                   /* (to the next page and back round: drawn afresh) */
+    wv_run(6);
+    while (cur_graph() != GR_DSND) {
+        press(B_EDIT);
+        wv_run(6);
+    }
+    wv_run(20);
+    bad += check("PRESETS turned there: the pictures are the new sound's once built", ok && rows_sum(92, 158) == left);
+    go_home();
+    return bad;
+}
 static int test_keep2(void)
 {
     int bad = 0;
@@ -752,6 +824,7 @@ int main(void)
     bad += test_fresh();
     bad += test_fxlist();
     bad += test_themes();
+    bad += test_wave_pic();
     bad += test_keep2();
     bad += test_own2();
     bad += test_undo_order();

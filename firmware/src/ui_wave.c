@@ -20,8 +20,11 @@ static uint32_t wave_sig(const track_t *t)
     const wv_part_t *P = wv_of(t);
     if (!P || t->engine != ENGI_WAVE)
         return 0x57A7u;
+    /* (.. and how far a table's building is: one built over an older one changes none of the ready bits, and the
+     * picture drawn as it began would stay the older table's) */
     return ((uint32_t)P->table[0] * 131u + (uint32_t)P->table[1] * 1543u + (uint32_t)P->ready[0] * 977u +
-            (uint32_t)P->ready[1] * 15601u + (uint32_t)P->live) * 2654435761u +
+            (uint32_t)P->ready[1] * 15601u + (uint32_t)P->live + (uint32_t)P->stage * 39916801u +
+            (uint32_t)P->bt * 87178291u) * 2654435761u +
            (uint32_t)(wave_pos(t, P, 0) >> 7) * 7919u + (uint32_t)(wave_pos(t, P, 1) >> 7) * 104729u;
 }
 /* oscillator o as it sounds now, set up for wv_osc: the frames its POS reads, through its WARP. 0: not built yet (a
@@ -29,10 +32,24 @@ static uint32_t wave_sig(const track_t *t)
 static int wave_now(const track_t *t, uint32_t o, wv_osc_t *O)
 {
     const wv_part_t *P = wv_of(t);
-    uint32_t f0, L;
-    if (!P || t->engine != ENGI_WAVE || !(P->ready[o] & 7u))
+    uint32_t f0, L, rd, done = 0, s;
+    if (!P || t->engine != ENGI_WAVE)
         return 0;
-    L = (P->ready[o] & 1u) ? 0u : (P->ready[o] & 2u) ? 1u : 2u;   /* the finest level that is whole */
+    rd = P->ready[o];
+    if (P->stage < WV_NL && P->bt == o) {                /* being built, over an older table when there was one (that
+                                                          * one's levels are written over one at a time, WV_ORDER): the
+                                                          * levels done so far are the new table's, so the picture is;
+                                                          * none yet: the older one's finest, whole a moment longer */
+        for (s = 0; s < P->stage; s++)
+            done |= 1u << WV_ORDER[s];
+        if (done & 7u)
+            rd = done;
+        else if (rd & 1u)
+            rd = 1u;
+    }
+    if (!(rd & 7u))
+        return 0;
+    L = (rd & 1u) ? 0u : (rd & 2u) ? 1u : 2u;            /* the finest level that is whole */
     (void)wv_warp_set(O, wv_kind(t->p, o), wv_amt(t->p, o));
     if (O->kind == WK_FM)                                /* (the other oscillator's doing: not in one's own picture) */
         O->kind = WK_OFF;
