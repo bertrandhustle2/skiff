@@ -698,7 +698,7 @@ static void draw_foot(void)
             ne_rule(0, 1);
         if (ux.quark)
             qk_rule(0);
-        cv_free_hint(8, ly, "[SELECT] PICK AN EFFECT", T_MID, T_BG, 196);
+        cv_free_hint(8, ly, "TURN SELECT KNOB: PICK ONE", T_MID, T_BG, 196);   /* ("knob": SEL is a button) */
         cv_text_r(232, ly, &AF_S, ti, T_MID, T_BG);
         cv_blit(0, foot_y());
         return;
@@ -1281,7 +1281,7 @@ static void draw_columns(void)
  * ABOUT (ui_menu.c), as ever */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-#define OPD_VERSION "1.2.1"
+#define OPD_VERSION "1.2.2"
 static const char *const SPLASH_LINES[] = {"OP DREAM", "version " OPD_VERSION, "based on Skiff"};
 /* the canvas twice as large, in place: from its last pixel back (a pixel's four land at or past where it was) */
 static void cv_double(void)
