@@ -81,10 +81,12 @@ static int head_mark_short(char *b)
         }
     return 0;
 }
-/* the title at the header's right: SHIFT's map; (2.5) a FREE TAKE's picker; HOME: the project's name (pn); the page's */
+/* the title at the header's right: SHIFT's map; (2.5) a FREE TAKE's picker; HOME: the project's name (pn; the new
+ * layout, none: TAPE); the page's */
 static const char *head_title(const char *pn)
 {
-    return ui.shift ? "SHIFT" : fr.on ? "FREE TAKE" : ui.home ? pn : page_head();
+    return ui.shift ? "SHIFT" : fr.on ? "FREE TAKE" : ui.home ? (UI_NEW && !pn[0] && !ui.home_scope ? "TAPE" : pn) : page_head();   /* ((the
+                                                       * new layout) HOME with no project named: what the screen is) */
 }
 static void draw_head_blocks(void)
 {

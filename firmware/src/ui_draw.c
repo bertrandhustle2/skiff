@@ -664,12 +664,15 @@ static void draw_foot(void)
         cv_blit(0, foot_y());
         return;
     }
-    if (design_on() && !ui.home && !act_cols() && !ui.ml.on) {   /* (the new layout) a sound only tried on the track
-                                                       * (ui_design.c): what keeps it there, for the whole line */
-        char h[28] = "HOLD [EDIT] KEEP ON T0";
-        h[21] = (char)('1' + song.sel % NTRK);
+    if (!ui.home && !act_cols() && !ui.ml.on &&        /* (the new layout) the designer (ui_design.c), for the whole */
+        (design_on() || (UI_NEW && GR_DESIGN(pg->graph) && TSEL->eng_req % NENGINES == ENGI_WAVE))) {   /* line: a sound
+                                                       * only tried on the track, what sends it there; the track's own
+                                                       * sound on the designer's pages, that it is changed as it plays */
+        char h[32];
+        str_cpy(h, design_on() ? "HOLD [EDIT] SEND TO T0" : "T0 PLAYS THIS: EDITS ARE LIVE", sizeof h);
+        h[design_on() ? 21 : 1] = (char)('1' + song.sel % NTRK);
         page_pos(ti);
-        sig = 0xDE519u + song.sel * 131u + str_hash(7u, ti) + (ui.edge_t != 0) * 5501u;
+        sig = 0xDE519u + song.sel * 131u + str_hash(7u, ti) + (ui.edge_t != 0) * 5501u + (uint32_t)design_on() * 977u;
         if (!ui.force && sig == ui.foot_sig)
             return;
         ui.foot_sig = sig;
@@ -678,7 +681,24 @@ static void draw_foot(void)
             ne_rule(0, 1);
         if (ux.quark)
             qk_rule(0);
-        cv_free_hint(8, ly, h, T_TEXT, T_BG, 190);
+        cv_free_hint(8, ly, h, design_on() ? T_TEXT : T_MID, T_BG, 196);
+        cv_text_r(232, ly, &AF_S, ti, T_MID, T_BG);
+        cv_blit(0, foot_y());
+        return;
+    }
+    if (UI_NEW && !ui.home && pg->graph == GR_FX && sheet_of(GR_FX) && !act_cols() && !ui.ml.on) {   /* (the new layout)
+                                                       * FX's list (ui_fxlist.c): how its rows are reached */
+        page_pos(ti);
+        sig = 0xF1157u + str_hash(7u, ti) + (ui.edge_t != 0) * 5501u;
+        if (!ui.force && sig == ui.foot_sig)
+            return;
+        ui.foot_sig = sig;
+        cv_begin(240, foot_h(), T_BG);
+        if (ux.neon)
+            ne_rule(0, 1);
+        if (ux.quark)
+            qk_rule(0);
+        cv_free_hint(8, ly, "[SELECT] PICK AN EFFECT", T_MID, T_BG, 196);
         cv_text_r(232, ly, &AF_S, ti, T_MID, T_BG);
         cv_blit(0, foot_y());
         return;
@@ -826,7 +846,7 @@ static void draw_foot(void)
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         (void)need;
         if (home_lanes() && !ui_hints_off && UI_NEW) {   /* ((TAPE) the new layout's HOME: REC held, PLAY held) */
-            int32_t hx = cv_free_hint(8, ly, "HOLD [REC] AGAIN", T_MID, T_BG, 112) + 14;
+            int32_t hx = cv_free_hint(8, ly, "HOLD [REC] CLEAR", T_MID, T_BG, 112) + 14;
             cv_free_hint(hx, ly, "HOLD [PLAY] LOOP", T_MID, T_BG, 230 - hx);
         } else
         if (home_lanes() && !ui_hints_off)             /* Skiff BLOCKS on HOME: the lanes name the sounds; the hint */
@@ -1252,117 +1272,86 @@ static void draw_columns(void)
 }
 
 
-/* The power-on splash (main.c fm1_main, web/emu felucca_web.c; 1.1.5): a RAISE square centred on the screen, square
- * corners (in every style; LINE too: RAISE from the palette's SURF), in it in AF_M, the ink SPL_PAD in from the left:
- * at the top the name and the version, the first line's capitals' top SPL_PAD down; at the bottom the maker and
- * "with community", the last line's capitals' bottom (its baseline) SPL_PAD up from the square's bottom. Both
- * margins are measured to the capitals (the descender of "community" hangs into the bottom one, as off a baseline).
- * The square (176 x 176) is more than the canvas (CV_MAX, 240 x 124): it is filled straight on the screen and its
- * two text bands drawn on it as canvases, the top one from the square's top edge, the bottom one to its bottom edge.
- * In the saved palette (settings_init before it) */
-#define SPL_SQ 176                                  /* the square (even: centred exactly) */
-#define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
+/* (OP DREAM 1.2) The power-on splash (main.c fm1_main, web/emu felucca_web.c): the whole screen, on BG, no box. At
+ * the top the name, twice the size of AF_L (drawn small, the canvas doubled), its ink SPL_PAD in from the left and its
+ * capitals' top SPL_PAD down; across the middle a tape asleep: two reels from margin to margin, the tape from one to
+ * the other with the six tracks' colours on it, over it a crescent moon and its stars; at the bottom, on two lines,
+ * the version and what it is based on, the last line's capitals' bottom (its baseline) SPL_PAD up from the screen's.
+ * The same in every theme, in the saved palette (settings_init before it). Skiff's and Felucca's credits: MENU >
+ * ABOUT (ui_menu.c), as ever */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-/* (OP DREAM) this build's own name on the splash, large, alone in the top band (AF_L: its capitals' top SPL_PAD
- * down); the bottom band says which build it is, what it is built on and whose that is */
-#define OPD_BUILD "5"
-static const char *const SPLASH_LINES[] = {"OP DREAM", "build " OPD_BUILD " on Skiff 2.6", "illuminus5 + H\xFCgelton"};
+#define OPD_VERSION "1.2"
+static const char *const SPLASH_LINES[] = {"OP DREAM", "version " OPD_VERSION, "based on Skiff"};
+/* the canvas twice as large, in place: from its last pixel back (a pixel's four land at or past where it was) */
+static void cv_double(void)
+{
+    uint32_t w = cv_w, h = cv_h, r, i;
+    if (4u * w * h > CV_MAX)
+        return;
+    for (r = h; r-- > 0u;)
+        for (i = w; i-- > 0u;) {
+            uint16_t c = cv_px[r * w + i];
+            uint32_t d = 4u * r * w + 2u * i;
+            cv_px[d] = cv_px[d + 1u] = cv_px[d + 2u * w] = cv_px[d + 2u * w + 1u] = c;
+        }
+    cv_w = 2u * w;
+    cv_h = 2u * h;
+}
 /* a reel: its rim, the tape wound on it (radius rp), three spokes turned by rot (a turn 2^32), the hub */
 static void spl_reel(int32_t cx, int32_t cy, int32_t r, int32_t rp, uint32_t rot, uint16_t hub)
 {
     uint32_t k;
     qk_disc(cx, cy, r, T_MID);
-    qk_disc(cx, cy, r - 1, T_RAISE);
-    qk_disc(cx, cy, rp, ux_mix(T_RAISE, T_TEXT, 45));
+    qk_disc(cx, cy, r - 2, T_BG);
+    qk_disc(cx, cy, rp, ux_mix(T_BG, T_TEXT, 45));
     for (k = 0; k < 3u; k++) {
         uint32_t ph = rot + k * 0x55555555u;
-        cv_line(cx, cy, cx + (r - 2) * QK_COS(ph) / 32767, cy + (r - 2) * QK_SIN(ph) / 32767, T_RAISE);
+        cv_line_t(cx, cy, cx + (r - 4) * QK_COS(ph) / 32767, cy + (r - 4) * QK_SIN(ph) / 32767, T_BG, 3);
     }
-    qk_disc(cx, cy, 5, hub);
-    cv_rect(cx - 1, cy - 1, 2, 2, T_RAISE);
+    qk_disc(cx, cy, 8, hub);
+    qk_disc(cx, cy, 2, T_BG);
 }
-static void spl_star(int32_t x, int32_t y, uint16_t c)
+static void spl_star(int32_t x, int32_t y, int32_t n, uint16_t c)   /* a plus, n long each way */
 {
-    cv_rect(x - 1, y, 3, 1, c);
-    cv_rect(x, y - 1, 1, 3, c);
-}
-/* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
- * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
-static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
-                        int32_t al1, const char *tag)
-{
-    cv_begin(SPL_SQ, h, T_RAISE);
-    GFX_HOOK_ALIGN(0, al0, 0, al1, mode | AL_N(2), tag);
-    cv_text_on(SPL_PAD, ly, &AF_M, l[0], T_TEXT, T_RAISE);
-    cv_text_on(SPL_PAD, ly + SPL_PITCH, &AF_M, l[1], T_TEXT, T_RAISE);
-    cv_blit(SPL_X0, y);
+    cv_rect(x - n, y, 2 * n + 1, 1, c);
+    cv_rect(x, y - n, 1, 2 * n + 1, c);
 }
 static void draw_splash(void)
 {
     int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* the bottom band: its two lines, the descenders in */
-    int32_t lb = h - SPL_PAD - AF_M_CAP_H - AF_M_CAP_Y;         /* the bottom band's last line: its top */
+    int32_t lb = h - SPL_PAD - AF_M_CAP_H - AF_M_CAP_Y;         /* .. its last line: its top */
+    uint32_t k;
     lcd_fill(0, 0, 240, 240, T_BG);
-    lcd_fill(SPL_X0, SPL_X0, SPL_SQ, SPL_SQ, T_RAISE);
-    cv_begin(SPL_SQ, (uint32_t)(SPL_PAD - AF_L_CAP_Y + AF_L.h), T_RAISE);   /* (OP DREAM) the name, alone */
-    cv_text_on(SPL_PAD, SPL_PAD - AF_L_CAP_Y, &AF_L, SPLASH_LINES[0], T_THEME, T_RAISE);
-    cv_blit(SPL_X0, SPL_X0);
-    splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 1, AL_B, 0, h - SPL_PAD,
-                "splash maker's baseline SPL_PAD from the bottom");
-    if (ux.crypt) {   /* (Skiff) CRYPT: a skull between two torches, between the bands (design/mock_crypt.py splash) */
-        cv_begin(SPL_SQ, 40, T_RAISE);
-        cr_torch(36, 8, 0, 2);
-        cr_spritez(SPL_SQ / 2 - 13, 6, SPR_SKULL, T_TEXT, T_RAISE, 3);
-        cr_torch(SPL_SQ - 46, 8, 1, 2);
-        cv_blit(SPL_X0, 98);
-    } else if (ux.quark) {   /* (Skiff Q2) QUARK: an atom in a collision's tracks (design/mock_quark.py splash), on the
-         * card as the other scenes are, whole ((1.0) no band of BG: it read as a squished box of another colour; 72 rows
-         * between the bands, not 40: the turned orbits were cut) */
-        uint32_t k;
-        cv_begin(SPL_SQ, 72, T_RAISE);
-        cv_cy0 = 0;
-        qk_burst(SPL_SQ / 2, 36, 6, 7u, 36, T_RAISE);
-        cv_rect(0, 0, SPL_PAD, 72, T_RAISE);              /* (the tracks kept off the margins) */
-        cv_rect(SPL_SQ - SPL_PAD, 0, SPL_PAD, 72, T_RAISE);
-        for (k = 0; k < 3u; k++) {                        /* the orbits a sixth of a turn apart, the far ones dimmer; */
-            uint32_t rot = k * 0x2AAAAAAAu, ph = 0x18000000u + k * 0x56000000u;   /* an electron on each */
-            int32_t ex = 30 * QK_COS(ph) / 32767, ey = 9 * QK_SIN(ph) / 32767;
-            qk_ellipse(SPL_SQ / 2, 36, 30, 9, rot, ux_mix(T_THEME, T_RAISE, 25 * k), 40);
-            qk_disc(SPL_SQ / 2 + (ex * QK_COS(rot) - ey * QK_SIN(rot)) / 32767,
-                    36 + (ex * QK_SIN(rot) + ey * QK_COS(rot)) / 32767, 1, T_ACCENT);
-        }
-        qk_disc(SPL_SQ / 2, 33, 2, T_TRK(0));             /* the nucleus: its quarks */
-        qk_disc(SPL_SQ / 2 + 3, 38, 2, T_TRK(1));
-        qk_disc(SPL_SQ / 2 - 3, 38, 2, T_TRK(2));
-        cv_blit(SPL_X0, 84);
-    } else if (ux.neon) {   /* (Skiff N3) NEON: the striped sun on the horizon, palms, the grid floor, the car on it
-         * (design/mock_neon.py splash) */
-        cv_begin(SPL_SQ, 40, T_RAISE);
-        ne_sun(SPL_SQ / 2, 24, 20, 0);
-        cv_rect(SPL_PAD, 24, SPL_SQ - 2 * SPL_PAD, 16, T_BG);   /* (SPL_PAD in, as the text: the square whole) */
-        ne_grid(SPL_PAD, SPL_SQ - SPL_PAD, 24, 40, T_THEME, T_BG);
-        cv_rect(SPL_PAD, 24, SPL_SQ - 2 * SPL_PAD, 1, T_THEME);
-        ne_palm(SPL_PAD + 4, 6, T_BG);
-        ne_palm(SPL_SQ - SPL_PAD - 22, 9, T_BG);
-        ne_car(SPL_SQ / 2 + 14, 30, SPR_CAR, 1, T_THEME, 30, T_BG);
-        cv_blit(SPL_X0, 98);
-    } else {   /* (OP DREAM) a tape asleep, between the bands: two reels, the tape from one to the other with the six
-         * tracks' colours on it, over them a crescent moon and its stars */
-        uint32_t k;
-        cv_begin(SPL_SQ, 72, T_RAISE);
-        spl_reel(SPL_PAD + 24, 42, 22, 17, 0x10000000u, T_THEME);
-        spl_reel(SPL_SQ - SPL_PAD - 24, 42, 22, 10, 0x38000000u, T_ACCENT);
-        cv_rect(SPL_PAD + 24, 65, SPL_SQ - 2 * SPL_PAD - 48, 1, T_MID);
-        for (k = 0; k < NTRK; k++)
-            cv_rect(65 + (int32_t)k * 8, 59, 6, 4, T_TRK(k));
-        qk_disc(SPL_SQ / 2, 16, 10, T_THEME);                 /* the moon: a disc, a bite out of it */
-        qk_disc(SPL_SQ / 2 + 5, 13, 9, T_RAISE);
-        spl_star(SPL_SQ / 2 - 25, 10, T_ACCENT);
-        spl_star(SPL_SQ / 2 + 25, 7, T_TEXT);
-        cv_rect(SPL_SQ / 2 + 32, 24, 1, 1, T_ACCENT);
-        cv_rect(SPL_SQ / 2 - 18, 26, 1, 1, T_TEXT);
-        cv_blit(SPL_X0, 80);
+    if (AF_L.sc) {                                              /* (a theme of pixel faces, Skiff's own layout's: its L is
+                                                                 * as large as it gets) */
+        cv_begin(240, (uint32_t)(SPL_PAD - AF_L_CAP_Y + AF_L.h), T_BG);
+        cv_text_on(SPL_PAD, SPL_PAD - AF_L_CAP_Y, &AF_L, SPLASH_LINES[0], T_THEME, T_BG);
+    } else {
+        cv_begin(120, (uint32_t)AF_L.h, T_BG);                  /* the name, small, then doubled */
+        cv_text_on(SPL_PAD / 2, SPL_PAD / 2 - AF_L_CAP_Y, &AF_L, SPLASH_LINES[0], T_THEME, T_BG);
+        cv_double();
     }
+    cv_blit(0, 0);
+    cv_begin(240, 116, T_BG);                                   /* the tape asleep: screen rows 66 .. 181 */
+    spl_reel(SPL_PAD + 42, 62, 42, 31, 0x10000000u, T_THEME);
+    spl_reel(240 - SPL_PAD - 42, 62, 42, 18, 0x38000000u, T_ACCENT);
+    cv_rect(SPL_PAD + 42, 105, 240 - 2 * SPL_PAD - 84, 2, T_MID);
+    for (k = 0; k < NTRK; k++)
+        cv_rect(86 + (int32_t)k * 12, 97, 9, 6, T_TRK(k));
+    qk_disc(120, 26, 15, T_THEME);                              /* the moon: a disc, a bite out of it */
+    qk_disc(128, 21, 13, T_BG);
+    spl_star(98, 10, 2, T_ACCENT);
+    spl_star(148, 6, 1, T_TEXT);
+    spl_star(144, 44, 1, T_ACCENT);
+    cv_rect(103, 46, 1, 1, T_TEXT);
+    cv_rect(137, 12, 1, 1, T_TEXT);
+    cv_blit(0, 66);
+    cv_begin(240, (uint32_t)h, T_BG);                           /* the version, what it is based on */
+    GFX_HOOK_ALIGN(0, 0, 0, h - SPL_PAD, AL_B | AL_N(2), "splash last line's baseline SPL_PAD from the bottom");
+    cv_text_on(SPL_PAD, lb - SPL_PITCH, &AF_M, SPLASH_LINES[1], T_TEXT, T_BG);
+    cv_text_on(SPL_PAD, lb, &AF_M, SPLASH_LINES[2], T_MID, T_BG);
+    cv_blit(0, 240 - (uint32_t)h);
     lcd_sync();
 }
 

@@ -53,6 +53,13 @@ PALETTES = [
     ("PEA",    (8, 28, 10),     (20, 52, 24),    (196, 228, 110), (150, 200, 40),  (236, 255, 170)),
     # CANDY: a light one, pink paper, plum text, magenta values, deep teal for the one active thing
     ("CANDY",  (255, 226, 238), (250, 200, 222), (58, 16, 66),    (160, 0, 100),   (0, 92, 140)),
+    # (OP DREAM 1.2) two more, colours only, in place of CRYPT and NEON on the new layout's THEME list (those two stay
+    # in this table, where Skiff's own layout, its tests and the stored ids know them: src/ui.c theme_hidden).
+    # LAGOON: a calm one, deep water, pale sky text, soft blue values, warm sand for the one active thing
+    ("LAGOON", (6, 18, 40),     (16, 36, 68),    (224, 240, 255), (120, 192, 255), (255, 214, 130)),
+    # PEBBLE: a light one, a grey shell, near-black text, blue values, orange-red for the one active thing; the tracks
+    # six plain colours
+    ("PEBBLE", (232, 232, 226), (212, 212, 206), (18, 18, 22),    (0, 70, 190),    (172, 34, 0)),
 ]
 SKIFF, CRYPT, NEON, QUARK = "SKIFF", "CRYPT", "NEON", "QUARK"
 # the six tracks' colours (src/gfx.c T_TRK; (Skiff phase 6) T5, T6 too): a palette not named here gives every track
@@ -70,7 +77,11 @@ TRACKS = {"SKIFF": [(255, 90, 54), (34, 195, 180), (255, 191, 0), (149, 128, 255
           "PEA": [(170, 220, 60), (110, 200, 110), (220, 230, 120), (80, 190, 150),   # lime leaf straw sea
                   (200, 200, 60), (150, 240, 170)],                                   # olive mint
           "CANDY": [(188, 16, 104), (120, 40, 190), (0, 112, 124), (184, 56, 0),      # pink grape teal toffee
-                    (30, 80, 200), (20, 120, 50)]}                                    # blueberry apple
+                    (30, 80, 200), (20, 120, 50)],                                    # blueberry apple
+          "LAGOON": [(110, 184, 255), (84, 222, 208), (244, 216, 150), (255, 150, 132),   # sky aqua sand coral
+                     (186, 166, 255), (150, 236, 170)],                                   # lilac mint
+          "PEBBLE": [(0, 84, 200), (0, 122, 60), (84, 84, 90), (176, 50, 0),             # blue green slate orange
+                     (160, 20, 120), (0, 116, 128)]}                                      # plum teal
 NTRACKS = 6
 # the eleven palettes before THEME (index order: their ids PAL_TAG + index) and Felucca's oldest twenty (ids below 20)
 OLD11 = ["GREY", "GREEN", "AMBER", "ICE", "VIOLET", "ROSE", "PAPER", "HI-CON", "NIGHT", "MONO", "SKIFF"]

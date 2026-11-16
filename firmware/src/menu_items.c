@@ -173,7 +173,8 @@ static const menu_flag_t *menu_flag(uint32_t row)
 /* a row's value as 0..menu_n(row) - 1 in the order the menu steps it (LEDS: OFF DIM LO DIM HI INV, LEDS_MENU) */
 static uint32_t menu_n(uint32_t row)
 {
-    return row == MI_COLOR ? NPALETTES + (uint32_t)cpal_stored() :   /* ((Skiff #27) CUSTOM, while stored) */
+    return row == MI_COLOR ? theme_nvis() + (uint32_t)cpal_stored() :   /* ((Skiff #27) CUSTOM, while stored; (OP DREAM)
+                                                       * the list's places: ui.c theme_hidden) */
            row == MI_LOWCUT || row == MI_RETURN || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_COUNT : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_CLOCK ? NELEM(N_CLOCK) : row == MI_TUNE ? 101u : row == MI_CPU ? 1u + FELUCCA_CPU2 :
@@ -191,7 +192,7 @@ static uint32_t menu_get(uint32_t row)
     if (f)
         return ((ui_prefs | (uint32_t)ui_rec_prefs << 8 | (uint32_t)MIDI_BYTE << 16) & f->bit) != 0;
     switch (row) {
-    case MI_COLOR: return cpal_on() ? NPALETTES : settings.palette % NPALETTES;   /* ((Skiff #27) CUSTOM: last) */
+    case MI_COLOR: return cpal_on() ? theme_nvis() : theme_place(settings.palette % NPALETTES);   /* ((Skiff #27) CUSTOM: last) */
     case MI_PHEAD: return ui_ph_line != 0;
     case MI_LOWCUT: return settings.lowcut % 3u;
     case MI_HOLD: return settings_hold % 4u;
@@ -228,7 +229,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     if (f)
         return f->name[v & 1u];
     switch (row) {
-    case MI_COLOR: return v < NPALETTES ? UI_PALETTES[v].name : "CUSTOM";
+    case MI_COLOR: return v < theme_nvis() ? UI_PALETTES[theme_at(v)].name : "CUSTOM";
     case MI_PHEAD: return v & 1u ? "LINE" : "THEME";
     case MI_LOWCUT: return SPK_EQ[v % 3u];
     case MI_HOLD: return HOLD_N[v & 3u];
@@ -316,8 +317,8 @@ static void menu_put(uint32_t row, uint32_t v)
     }
     switch (row) {
     case MI_COLOR:                                     /* ((Skiff #27) CUSTOM: the stored colours in their look) */
-        CPAL_BYTE = (uint8_t)(v >= NPALETTES ? CPAL_BYTE | 2u : CPAL_BYTE & ~2u);
-        settings.palette = v >= NPALETTES ? CPAL_BYTE >> 2 & 7u : v;   /* (a look past QUARK: palette_set wraps it) */
+        CPAL_BYTE = (uint8_t)(v >= theme_nvis() ? CPAL_BYTE | 2u : CPAL_BYTE & ~2u);
+        settings.palette = v >= theme_nvis() ? CPAL_BYTE >> 2 & 7u : theme_at(v);   /* (a look past QUARK: palette_set wraps it) */
         theme_apply();                                 /* (the menu signature redraws) */
         ui.force = 1;
         break;

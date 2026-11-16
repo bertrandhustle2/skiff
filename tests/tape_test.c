@@ -491,7 +491,7 @@ static int test_tape_panel(void)
 
 /* the new layout, as the unit powers on (main.c tape_power_on): HOME is the tape's screen and REC records onto it;
  * LOOP off it plays once and stops; a later take may run past the end; PLAY held: LOOP; REC held: another take (the
- * track wiped, a take armed), SAVE held undoes it; SEQ is the step sequencer (its REC the steps', REC held clears
+ * track's tape wiped and its steps cleared, a take armed), SAVE held undoes it; SEQ is the step sequencer (its REC the steps', REC held clears
  * them), SAVE's PATTERNS are there */
 static void hold_btn(uint32_t label, int blocks_too)  /* held past MENU > HOLD's time, the ISR running, then let go */
 {
@@ -604,8 +604,40 @@ static int test_tape_first(void)
     trk[1].step[3] = (step_t){{60}, 1, ST_NOTE};
     frame();
     hold_btn(B_REC, 0);
-    bad += check("REC held there: the selected track's steps cleared (one undo), its tape untouched",
-                 seq_is_empty(&trk[1]) && tape_count(1) == 1u);
+    bad += check("REC held there: the selected track's steps cleared and its tape wiped, track 1's kept, no take armed",
+                 seq_is_empty(&trk[1]) && tape_count(1) == 0u && tape_count(0) == 1u && !tape_rec_on());
+    hold_btn(B_SAVE, 1);
+    bad += check("SAVE held: the tape's wipe undone first", tape_count(1) == 1u && seq_is_empty(&trk[1]));
+    hold_btn(B_SAVE, 1);
+    bad += check("... held again: the steps back too", !seq_is_empty(&trk[1]) && tape_count(1) == 1u);
+    stop_transport();
+    go_home(); frame();
+    hold_btn(B_REC, 1);                               /* HOME: the same two, and a take armed */
+    bad += check("REC held on HOME: the track's steps and its tape both gone, track 1's kept, a take armed",
+                 seq_is_empty(&trk[1]) && tape_count(1) == 0u && tape_count(0) == 1u && tape_rec_on() && !song.playing);
+    press(B_REC);
+    block();
+    frame();
+    hold_btn(B_SAVE, 1);
+    hold_btn(B_SAVE, 1);
+    bad += check("SAVE held twice: both back", !seq_is_empty(&trk[1]) && tape_count(1) == 1u);
+    trk[1].step[3] = (step_t){{0}, 0, 0};             /* steps only now: REC held clears those, arms a take */
+    {
+        uint32_t i;
+        for (i = 0; i < NSTEP; i++)
+            trk[1].step[i].n = 0;
+    }
+    hold_btn(B_REC, 1);
+    press(B_REC);
+    block();
+    frame();
+    trk[1].step[7] = (step_t){{62}, 1, ST_NOTE};
+    frame();
+    hold_btn(B_REC, 1);
+    bad += check("REC held on HOME, steps only on the track: cleared, a take armed", seq_is_empty(&trk[1]) && tape_rec_on());
+    press(B_REC);
+    block();
+    frame();
     stop_transport();
     go_home(); frame();
     return bad;

@@ -187,7 +187,8 @@ static int wide_ids(void)
 static int preferences(void)
 {
     int bad = 0;
-    uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: 3, CRYPT) */
+    uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: the list's 4th; (OP DREAM 1.2) QUARK, CRYPT and
+                                                           * NEON not offered: ui.c theme_hidden) */
     reset();
     uint32_t n = request(ED_INFO, a, 0);
     bad += check("INFO (2.0) the song's tag last: 58 01 01 (LIST2, NEW, COPY+, CHAIN, ONCE, EMPTY, CLEAR UNUSED)",
@@ -221,9 +222,10 @@ static int preferences(void)
                                                                                           * COND NUDGE */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
-        host_wire[5] == 3 && settings.palette == 3 && T_BG == UI_PALETTES[3].bg && ux.crypt);
-    a[1] = NPALETTES; request(ED_UI_SET, a, 2);
-    bad += check("out-of-range palette leaves the display unchanged", host_wire[5] == 1 && settings.palette == 3);
+        host_wire[5] == 3 && settings.palette == UI_QUARK_INDEX && T_BG == UI_PALETTES[UI_QUARK_INDEX].bg && ux.quark &&
+        !ux.crypt && theme_nvis() == NPALETTES - 2u);
+    a[1] = (uint8_t)theme_nvis(); request(ED_UI_SET, a, 2);
+    bad += check("out-of-range palette leaves the display unchanged", host_wire[5] == 1 && settings.palette == UI_QUARK_INDEX);
     a[0] = 1; a[1] = 1; request(ED_UI_SET, a, 2);
     bad += check("the retired font weight is not supported (rc 2), UI_STATE says 127",
         host_wire[5] == 2 && host_wire[8] == 25 && host_wire[10] == 127);
@@ -956,11 +958,13 @@ static int menu_protocol(void)
         for (k = 0; k < it.nnames; k++) { if (k) strcat(joined, ","); strcat(joined, it.names[k]); }
         ok &= n > 10u && it.index == i && it.id == ID[w] && it.kind == 0 && it.min == 0 &&
               it.max + 1 == (int32_t)it.nnames && !strcmp(it.name, WANT[w][0]) &&
-              (WANT[w][1] ? !strcmp(joined, WANT[w][1]) : it.nnames == NPALETTES) &&
-              it.value == (DEF[w] < 0 ? (int32_t)settings.palette : DEF[w]) &&
+              (WANT[w][1] ? !strcmp(joined, WANT[w][1]) : it.nnames == theme_nvis()) &&
+              it.value == (DEF[w] < 0 ? (int32_t)theme_place(settings.palette) : DEF[w]) &&
               it.tab == TAB[w] && !strcmp(it.tabname, TABN[TAB[w]]) && !it.rest;
         if (i == 0)
-            for (k = 0; k < NPALETTES; k++) ok &= !strcmp(it.names[k], UI_PALETTES[k].name);
+            for (k = 0; k < theme_nvis(); k++)          /* ((OP DREAM 1.2) the themes offered, in the table's order) */
+                ok &= !strcmp(it.names[k], UI_PALETTES[theme_at(k)].name) && strcmp(it.names[k], "CRYPT") &&
+                      strcmp(it.names[k], "NEON");
         if (!ok) { printf("  MENU_DESC %u: %s [%s] value %d max %d tab %u %s\n", i, it.name, joined, it.value, it.max, it.tab, it.tabname); break; }
         if (jf) {
             fprintf(jf, "%s\n {\"id\":%u,\"kind\":%u,\"min\":%d,\"max\":%d,\"value\":%d,\"name\":\"%s\",\"names\":[", i ? "," : "",
@@ -1033,7 +1037,7 @@ static int menu_protocol(void)
     bad += check("MENU_SET: a flag back to its default leaves the other flags", ok);
 
     /* clamping: the reply carries the device's value */
-    ok = menu_set(0, 50) == 3 && ed_rv(host_wire + 7) == (int32_t)NPALETTES - 1 && settings.palette == NPALETTES - 1u;
+    ok = menu_set(0, 50) == 3 && ed_rv(host_wire + 7) == (int32_t)theme_nvis() - 1 && settings.palette == NPALETTES - 1u;
     ok &= menu_set(0, -5) == 3 && ed_rv(host_wire + 7) == 0 && settings.palette == 0u;
     ok &= menu_set(4, 99) == 3 && ed_rv(host_wire + 7) == 3 && settings_leds == LEDS_INV;
     ok &= menu_set(5, 8191) == 3 && ed_rv(host_wire + 7) == 3 && settings_hold == 3u;
@@ -1565,11 +1569,13 @@ static int custom_colors(void)
     uint8_t a[4] = {0, 0, 0, 0};
     menu_item_t it;
     sks_t p;
-    uint32_t i;
+    uint32_t i, NV;
     reset();
+    NV = theme_nvis();                                      /* ((OP DREAM 1.2) the themes offered: all but CRYPT and NEON) */
     ok = colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 0 && host_wire[7] == 0;
-    ok &= palettes_listed() == NPALETTES && menu_n(MI_COLOR) == NPALETTES && (request(ED_UI_STATE, 0, 0), host_wire[5] & ED_UI_COLORS);
-    bad += check("(#27) COLORS: none stored (flags 0), the 22 bytes in pack7; THEME lists its six; UI_STATE's caps say COLORS", ok);
+    ok &= NV == NPALETTES - 2u && palettes_listed() == NV && menu_n(MI_COLOR) == NV &&
+          (request(ED_UI_STATE, 0, 0), host_wire[5] & ED_UI_COLORS);
+    bad += check("(#27) COLORS: none stored (flags 0), the 22 bytes in pack7; THEME lists the ones offered; UI_STATE's caps say COLORS", ok);
 
     ok = colors_req(0, UI_QUARK_INDEX, CC, 99) == 0 && tokens_are(CC) && ux.quark && !ux.neon && settings.palette == 0u &&
          host_wire[6] == 0 && !CPAL_BYTE && !favorites.factory[14][8] && ui.force;
@@ -1583,24 +1589,25 @@ static int custom_colors(void)
          favorites.factory[14][28] == (CC[10] & 255u) && favorites.factory[14][29] == CC[10] >> 8 &&
          !favorites.factory[14][30] && !favorites.factory[14][7];
     bad += check("(#27) COLORS op 1: stored ([14][8..29], low byte first; [15][14] 3 | look << 2) and in use (rc 3: RAM only here)", ok);
-    ok = palettes_listed() == (NPALETTES + 1u | 256u) && (request(ED_UI_STATE, 0, 0), host_wire[6] == NPALETTES);
+    ok = palettes_listed() == (NV + 1u | 256u) && (request(ED_UI_STATE, 0, 0), host_wire[6] == NV);
     menu_desc(0, &it);
-    ok &= it.max == (int32_t)NPALETTES && it.value == (int32_t)NPALETTES && !strcmp(it.names[NPALETTES], "CUSTOM") &&
-          menu_get(MI_COLOR) == NPALETTES && !strcmp(menu_vname(MI_COLOR, NPALETTES), "CUSTOM");
-    bad += check("(#27) THEME CUSTOM, last while stored: UI_PALETTES 7 names, UI_STATE and MENU_DESC say it is in use", ok);
+    ok &= it.max == (int32_t)NV && it.value == (int32_t)NV && !strcmp(it.names[NV], "CUSTOM") &&
+          menu_get(MI_COLOR) == NV && !strcmp(menu_vname(MI_COLOR, NV), "CUSTOM");
+    bad += check("(#27) THEME CUSTOM, last while stored: UI_PALETTES one name more, UI_STATE and MENU_DESC say it is in use", ok);
 
     a[0] = 0; a[1] = 1; request(ED_UI_SET, a, 2);           /* HI-CON */
     ok = host_wire[5] == 3 && settings.palette == 1u && tokens_builtin(1) && cpal_stored() && !cpal_on() &&
          colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 1 && host_wire[7] == UI_NEON_INDEX && colors_are(CC) &&
-         menu_n(MI_COLOR) == NPALETTES + 1u;
-    a[1] = NPALETTES; request(ED_UI_SET, a, 2);             /* CUSTOM again: in its look */
+         menu_n(MI_COLOR) == NV + 1u;
+    a[1] = (uint8_t)NV; request(ED_UI_SET, a, 2);           /* CUSTOM again: in its look (NEON's: a set's look may still be
+                                                             * one of the two the list leaves out) */
     ok &= host_wire[5] == 3 && settings.palette == UI_NEON_INDEX && cpal_on() && tokens_are(CC) && ux.neon;
-    menu_put(MI_COLOR, NPALETTES - 1u);                     /* the MENU's THEME: the last one ((TAPE build) CANDY, QUARK before),
-                                                             * then a step on is CUSTOM */
-    ok &= settings.palette == NPALETTES - 1u && tokens_builtin(NPALETTES - 1u) && menu_step(MI_COLOR, 1) == NPALETTES;
+    menu_put(MI_COLOR, NV - 1u);                            /* the MENU's THEME: the last one ((OP DREAM 1.2) PEBBLE), then a
+                                                             * step on is CUSTOM */
+    ok &= settings.palette == NPALETTES - 1u && tokens_builtin(NPALETTES - 1u) && menu_step(MI_COLOR, 1) == NV;
     menu_put(MI_COLOR, menu_step(MI_COLOR, 1));
     ok &= cpal_on() && settings.palette == UI_NEON_INDEX && tokens_are(CC) && menu_step(MI_COLOR, 1) == 0u &&
-          menu_step(MI_COLOR, -1) == NPALETTES - 1u;
+          menu_step(MI_COLOR, -1) == NV - 1u;
     bad += check("(#27) THEME: CUSTOM and back by UI_SET and the MENU (it wraps round them all), the set kept, CUSTOM in its look", ok);
 
     for (i = 0; i < CPAL_N; i++) bad_c[i] = (uint16_t)~CC[i];
@@ -1626,11 +1633,15 @@ static int custom_colors(void)
           ux.neon;
     bad += check("(#27) the set kept with the settings: its THEME field the look, read back in use", ok);
 
-    ok = colors_req(2, 0, 0, 1) == 3 && host_wire[6] == 0 && !CPAL_BYTE && settings.palette == UI_NEON_INDEX &&
-         tokens_builtin(UI_NEON_INDEX) && palettes_listed() == NPALETTES && menu_n(MI_COLOR) == NPALETTES;
-    a[1] = NPALETTES; request(ED_UI_SET, a, 2);
-    ok &= host_wire[5] == 1 && settings.palette == UI_NEON_INDEX;
-    bad += check("(#27) COLORS op 2: removed, the look's own colours; CUSTOM gone from THEME (UI_SET 6: rc 1)", ok);
+    ok = colors_req(2, 0, 0, 1) == 3 && host_wire[6] == 0 && !CPAL_BYTE && settings.palette == UI_SKIFF_INDEX &&
+         tokens_builtin(UI_SKIFF_INDEX) && palettes_listed() == NV && menu_n(MI_COLOR) == NV;
+    a[1] = (uint8_t)NV; request(ED_UI_SET, a, 2);
+    ok &= host_wire[5] == 1 && settings.palette == UI_SKIFF_INDEX;
+    bad += check("(#27) COLORS op 2: removed; its look was NEON, not offered since 1.2, so SKIFF; CUSTOM gone from THEME (UI_SET: rc 1)", ok);
+    colors_req(1, UI_QUARK_INDEX, CC, 99);                  /* (a look that is offered: its own colours after) */
+    ok = cpal_on() && ux.quark && colors_req(2, 0, 0, 1) == 3 && !CPAL_BYTE && settings.palette == UI_QUARK_INDEX &&
+         tokens_builtin(UI_QUARK_INDEX);
+    bad += check("(#27) COLORS op 2 of a set in QUARK's look: QUARK's own colours", ok);
 
     colors_req(1, UI_CRYPT_INDEX, CC, 99);
     ui_ph_line = 1;
@@ -1646,7 +1657,7 @@ static int custom_colors(void)
         memset(&f.favorites.factory[14][8], 0x5A, 22);
         settings_import(&f, (int)sizeof f);
         theme_apply();
-        ok = !cpal_stored() && !CPAL_COLS[0] && tokens_builtin(UI_QUARK_INDEX) && menu_n(MI_COLOR) == NPALETTES &&
+        ok = !cpal_stored() && !CPAL_COLS[0] && tokens_builtin(UI_QUARK_INDEX) && menu_n(MI_COLOR) == NV &&
              colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 0;
     }
     bad += check("(#27) another firmware's settings: no set read from its bytes", ok);

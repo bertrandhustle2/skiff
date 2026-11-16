@@ -134,8 +134,35 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 static uint32_t cpal_bits(void) { return CPAL_BYTE; }
 #define cpal_stored() (cpal_bits() & 1u)
 #define cpal_on() ((cpal_bits() & 3u) == 3u)
+/* (OP DREAM 1.2) THEME's list on the new layout: CRYPT and NEON are not offered (their palettes stay in the table,
+ * where Skiff's own layout, its tests and the stored ids know them by their place). A place in the list <-> a palette */
+static int theme_hidden(uint32_t i) { return UI_NEW && (i == UI_CRYPT_INDEX || i == UI_NEON_INDEX); }
+static uint32_t theme_nvis(void)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NPALETTES; i++)
+        n += !theme_hidden(i);
+    return n;
+}
+static uint32_t theme_at(uint32_t v)                    /* the palette at place v of the list */
+{
+    uint32_t i;
+    for (i = 0; i < NPALETTES; i++)
+        if (!theme_hidden(i) && !v--)
+            return i;
+    return UI_SKIFF_INDEX;
+}
+static uint32_t theme_place(uint32_t pal)               /* palette pal's place in the list */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < pal % NPALETTES; i++)
+        n += !theme_hidden(i);
+    return n;
+}
 static void theme_apply(void)                  /* settings.palette, and over it the user's colours while in use */
 {
+    if (!cpal_on() && theme_hidden(settings.palette % NPALETTES))   /* (one of the two, kept from Skiff: its default) */
+        settings.palette = UI_SKIFF_INDEX;
     ux_cpal = cpal_on() ? CPAL_COLS : 0;
     palette_set(settings.palette);
 }
@@ -536,6 +563,7 @@ typedef struct {
     void (*pick)(int32_t s);                     /* PRESETS */
     const char *pj;                              /* PRESETS' job (SHIFT's map) */
 } sheet_t;
+#define SHEET_ANY 0xFFu                          /* (.eng) a sheet for every kind of sound: the new layout's FX list */
 static const sheet_t *sheet_of(uint32_t g);
 /* SELECT on a sheet: its window down (d > 0) or up; 0 at its ends (SELECT goes on to the page there) */
 static int sheet_rows(const sheet_t *sh, int32_t d)
@@ -686,7 +714,7 @@ static int page_visible(uint32_t i)
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const sheet_t *sh = sheet_of(PAGES[i].graph);
     uint32_t id = PAGES[i].id[0];
-    if (sh)
+    if (sh && sh->eng != SHEET_ANY)
         return TSEL->eng_req % NENGINES == sh->eng;
     if (PAGES[i].graph == GR_LANES)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;

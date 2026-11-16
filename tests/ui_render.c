@@ -819,7 +819,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_EDIT_WAVE, S_EDIT_WAVE_GROWL, S_EDIT_WAVE_FLT, S_EDIT_WAVE_NEW,                        /* (WAVE) */
        S_SAVE_PROJECT, S_SAVE_PROJECT_USED, S_SAVE_PROJECT_NEW, S_SAVE_SOUND, S_SAVE_SOUND_USED,   /* (the new layout's SAVE) */
        S_DESIGN_SND, S_DESIGN_A, S_DESIGN_A_HOT, S_DESIGN_A2, S_DESIGN_B, S_DESIGN_B2, S_DESIGN_SUB, S_DESIGN_FLT,
-       S_DESIGN_FLT2, S_DESIGN_FLT3, S_DESIGN_OWN, S_DESIGN_FX, S_DESIGN_ENV, S_FX_LIST,           /* (.. its designer, the moved pages) */
+       S_DESIGN_FLT2, S_DESIGN_FLT3, S_DESIGN_OWN, S_DESIGN_FX, S_DESIGN_ENV, S_FX_LIST, S_FX_LIST_ROW,   /* (.. its designer, the moved pages) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "project", "lanes", "step", "pattern", "chance", "motion", "drum",
@@ -858,7 +858,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "chord_strum_alt", "shift_song", "hint_free_take",
     "tape_empty", "tape", "tape_rec", "tape_first", "tape_full", "shift_tape", "home_tape_empty", "home_tape", "home_tape_rec",
     "home_tape_armed", "home_tape_steps", "edit_wave", "edit_wave_growl", "edit_wave_flt", "edit_wave_new", "save_project", "save_project_used", "save_project_new", "save_sound", "save_sound_used", "design_sound", "design_a", "design_a_hot", "design_a2", "design_b", "design_b2", "design_sub", "design_flt",
-    "design_flt2", "design_flt3", "design_own", "design_fx", "design_env", "fx_list", "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
+    "design_flt2", "design_flt3", "design_own", "design_fx", "design_env", "fx_list", "fx_list_row", "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
 /* the scenes of the UI design screens: the state the UI-redesign
  * prototype drew them from (its setup(): two pattern tracks, the drum pattern on track 4, a synthetic scope),
@@ -1373,7 +1373,9 @@ static void setup(int s)
         break;
     }
     case S_FX_LIST:                                  /* (the new layout) FX: the track's effects, a list: DRIVE, DELAY, */
-        song.playing = 0;                            /* REVERB and the INSERT on, the others off */
+    case S_FX_LIST_ROW:                              /* REVERB and the INSERT on, the others off; SELECT on INSERT's row */
+        fxl_win = (uint8_t)(s == S_FX_LIST_ROW ? 5 : 0);
+        song.playing = 0;
         tape.to_pat = 0;
         ui.msg_t = 0;
         TSEL->p[P_DIST] = 40;
@@ -2080,33 +2082,32 @@ static void draw(int s)
     }
     if (s == S_SPLASH) {                          /* the power-on splash (main.c, before the UI): its lines, the version
                                                    * shown FELUCCA_VERSION (run_tests.sh: src/felucca.c's) */
-        static const char WANT[] = "OP DREAM|build " OPD_BUILD " on Skiff 2.6|illuminus5 + H\xFCgelton";   /* (OP DREAM) */
+        static const char WANT[] = "OP DREAM|version " OPD_VERSION "|based on Skiff";   /* (OP DREAM 1.2) */
         splash_seen[0] = 0;
         in_splash = 1;
         draw_splash();
         in_splash = 0;
-        {   /* the square whole on the screen (176 x 176 at 32,32, more than the canvas): its edges and square corners
-             * RAISE, BG just outside; its text's ink 16 px in from the left and the top (the bottom: AL_B, the hook) */
-            const int32_t q0 = 32, q1 = 32 + 176 - 1;
-            uint16_t bg = host_screen[0], ra = host_screen[(uint32_t)(q0 + 1) * 240u + (uint32_t)q0 + 1];
-            int32_t i, x, y, ix = 999, iy = 999, bad = ra == bg;
-            for (i = q0 - 1; i <= q1 + 1; i++) {
-                int32_t in = i >= q0 && i <= q1;
-                bad |= host_screen[(uint32_t)(q0 - 1) * 240u + (uint32_t)i] != bg || host_screen[(uint32_t)(q1 + 1) * 240u + (uint32_t)i] != bg
-                    || host_screen[(uint32_t)i * 240u + (uint32_t)(q0 - 1)] != bg || host_screen[(uint32_t)i * 240u + (uint32_t)(q1 + 1)] != bg;
-                if (in)
-                    bad |= host_screen[(uint32_t)q0 * 240u + (uint32_t)i] != ra || host_screen[(uint32_t)q1 * 240u + (uint32_t)i] != ra
-                        || host_screen[(uint32_t)i * 240u + (uint32_t)q0] != ra || host_screen[(uint32_t)i * 240u + (uint32_t)q1] != ra;
-            }
-            for (y = q0; y <= q1; y++)
-                for (x = q0; x <= q1; x++)
-                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != ra) {
-                        if (x - q0 < ix) ix = x - q0;
-                        if (y - q0 < iy) iy = y - q0;
+        {   /* (OP DREAM 1.2) the whole screen, no box: BG in all four corners and no RAISE square's edge at 32; the
+             * name's ink 16 px in from the left and its capitals 16 px down; the last line's baseline 16 px up */
+            uint16_t bg = host_screen[0];
+            int32_t x, y, ix = 999, iy = 999, ib = -1, bad;
+            bad = host_screen[239] != bg || host_screen[239u * 240u] != bg || host_screen[239u * 240u + 239u] != bg;
+            for (y = 0; y < 240; y++)                 /* the left and right margins, the row under the name: BG all along */
+                bad |= host_screen[(uint32_t)y * 240u + 7u] != bg || host_screen[(uint32_t)y * 240u + 232u] != bg ||
+                       host_screen[63u * 240u + (uint32_t)y] != bg;
+            for (y = 0; y < 64; y++)                  /* the name's rows */
+                for (x = 0; x < 240; x++)
+                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != bg) {
+                        if (x < ix) ix = x;
+                        if (y < iy) iy = y;
                     }
-            if (bad || ix != 16 || iy != 16) {
-                if (rep) fprintf(rep, "FIND %-26s the splash square not whole (edges %s) or its text not 16 px in (left %d, top %d)\n",
-                                 cur_name, bad ? "off" : "ok", (int)ix, (int)iy);
+            for (y = 239; y >= 184 && ib < 0; y--)    /* the two lines at the bottom: their lowest ink */
+                for (x = 0; x < 240; x++)
+                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != bg)
+                        ib = y;
+            if (bad || ix != 16 || iy != 16 || ib < 240 - 16 - 1 || ib > 240 - 16) {   /* (a round letter's foot: a row under) */
+                if (rep) fprintf(rep, "FIND %-26s the splash: a corner not BG (%s), or its name not 16 px in (left %d, top %d), or "
+                                 "its last line's foot not 16 px up (row %d)\n", cur_name, bad ? "off" : "ok", (int)ix, (int)iy, (int)ib);
                 nfind++;
             }
         }
@@ -2115,7 +2116,7 @@ static void draw(int s)
             nfind++;
         } else {
             static uint8_t said;
-            if (!said++) printf("ui_render: the splash shows OP DREAM, build " OPD_BUILD " and its lines\n");
+            if (!said++) printf("ui_render: the splash shows OP DREAM, version " OPD_VERSION " and its lines, on the whole screen\n");
         }
         return;
     }
@@ -2525,7 +2526,7 @@ int main(int argc, char **argv)
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
     char path[600];
     uint32_t p, s;
-    static const char *const SHOW[] = {"SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK", "TAPE", "PEA", "CANDY"};   /* ((Skiff, R1)
+    static const char *const SHOW[] = {"SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK", "TAPE", "PEA", "CANDY", "LAGOON", "PEBBLE"};   /* ((Skiff, R1)
                                                       * THEME's; (TAPE build) three more) */
     snprintf(path, sizeof path, "%s/report.txt", out);
     rep = fopen(path, "w");

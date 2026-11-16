@@ -213,9 +213,12 @@ int main(void)
     memset(&ps, 0, sizeof ps);
     settings_export(&ps);
     ps.lowcut = 2;                                       /* SPEAKER BASS+ */
-    ps.palette = palette_to_stored(3);
+    ps.palette = palette_to_stored(5);                   /* (QUARK; (OP DREAM 1.2) 3 and 4, CRYPT and NEON, are not offered) */
     bad += check("settings with SPEAKER BASS+ restore", put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 &&
-                 settings.lowcut == 2u && fx_lowcut == 2u && settings.palette == 3u);
+                 settings.lowcut == 2u && fx_lowcut == 2u && settings.palette == 5u);
+    ps.palette = palette_to_stored(3);
+    bad += check("(OP DREAM 1.2) a backup whose theme was CRYPT restores as SKIFF",
+                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings.palette == 0u && settings.lowcut == 2u);
     ps.palette = 13;                                     /* an older backup: its PAPER (old id 13) */
     bad += check("settings of an older backup restore with the palette migrated",
                  put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings.palette == 2u);

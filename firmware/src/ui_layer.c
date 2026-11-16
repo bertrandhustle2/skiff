@@ -1467,6 +1467,11 @@ static void shift_map(smap_t *m)
         m[10] = (smap_t){"+ OCT-", "TAKE BACK", 2};
         m[11] = (smap_t){"+ EDIT", "CLEAR", 2};
     }
+    if (UI_NEW && !ui.home && GR_DESIGN(g)) {        /* (the new layout's designer, ui_design.c: EDIT's jobs there) */
+        m[3] = (smap_t){"EDIT", "NEXT PAGE", 1};
+        m[4] = (smap_t){"HOLD EDIT", design_on() ? "TO TRACK" : "KEEP", 1};
+        m[11] = (smap_t){"+ EDIT", "PLAIN SAW", 2};
+    }
     if (tape_loop_key())                             /* (.. and there, and on HOME with REC TO TAPE: + PLAY its LOOP) */
         m[6] = (smap_t){"+ PLAY", tape.loop ? "LOOP OFF" : "LOOP ON", 2};
     if (g == GR_SONG) {                              /* ((2.5) SONG: + PLAY the song from the entry, + EDIT empties it) */

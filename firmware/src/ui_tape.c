@@ -2,7 +2,7 @@
  * The tape on the screens (tape.c). The new layout (UI_NEW, the unit's): HOME is the tape's screen (two reels, the
  * six tracks' sounds, each with its lane of the tape, every note where it was played and as long as it was held, the
  * playhead, the end); REC records onto it on every page but SEQ's, where it records the steps as Skiff does. REC
- * held: another take (the selected track's tape wiped, a take armed; on SEQ's pages its steps cleared). PLAY held, or
+ * held: the selected track from scratch (its steps cleared and its tape wiped; a take armed, but on SEQ's pages). PLAY held, or
  * SHIFT + PLAY: LOOP. SAVE held undoes the tape's last take or wipe when that is the newest thing to undo.
  * Skiff's own layout (the host tests'): the tape's page is SEQ > TAPE, KNOB 1 LOOP, KNOB 2 END, REC there records
  * onto it, SHIFT + EDIT wipes the selected track's, SHIFT + OCT- takes the last take or wipe back.
@@ -141,18 +141,33 @@ static void tape_ui_undo(void)
 static uint16_t tape_useq __attribute__((section(".pool")));
 static int tape_undo_newest(void) { return tape.back != TU_NONE && tape_useq == upin.seq && !undo_back; }
 
-/* REC held (ui_input.c): another take. On SEQ's pages the selected track's steps go (Skiff's own clear, one undo);
- * everywhere else its tape: stopped, wiped, a take armed (tape_ui_poll, once it has stopped) */
+/* REC held (ui_input.c): the selected track from scratch, on every page: its steps go (Skiff's own clear, one undo)
+ * and its tape is wiped (one undo of the tape's: SAVE held takes the wipe back, held again the steps). On SEQ's
+ * pages that is all, at once (REC records steps there). Everywhere else the tape is stopped first and a take armed
+ * after the wipe (tape_ui_poll, once it has stopped). */
 static void rec_clear(void);                            /* (ui_layer.c) */
+static uint8_t retake_steps __attribute__((section(".pool")));   /* the retake under way cleared steps too */
 static void tape_ui_retake(void)
 {
+    uint32_t k = song.sel % NTRK;
+    int steps = !seq_is_empty(TSEL) || motion_count(TSEL), had = tape_count(k) != 0;
     if (!ui.home && page_fam(cur_page()) == FAM_SEQ) {
-        rec_clear();
+        if (steps || !had)
+            rec_clear();                                /* (nothing at all on the track: it says so) */
+        if (had) {
+            char b[4] = {'T', (char)('1' + k), 0, 0};
+            tape_clear(1u << k);
+            ui_say(b, steps ? ": STEPS + TAPE GONE" : ": TAPE CLEARED");   /* (a message: 23 letters) */
+            str_cpy(ui.msg2, steps ? "HOLD [SAVE] 2X: UNDO" : "HOLD [SAVE]: UNDO", sizeof ui.msg2);
+        }
         return;
     }
+    if (steps)
+        rec_clear();
+    retake_steps = (uint8_t)steps;
     if (song.playing || seq_counting())
         transport_req = 2;
-    tape.q_retake = (uint8_t)(1u + song.sel % NTRK);
+    tape.q_retake = (uint8_t)(1u + k);
 }
 /* every frame (ui_input): the pool ran out during a take, said once; which undo is the newest; a retake carried out */
 static void tape_ui_poll(void)
@@ -174,11 +189,14 @@ static void tape_ui_poll(void)
                !tape.run && !tape.q_clr) {
         uint32_t k = (tape.q_retake - 1u) % NTRK;
         char b[4] = {'T', (char)('1' + k), 0, 0};
+        int had = tape_count(k) != 0;
         tape.q_retake |= 0x80u;
-        if (tape_count(k)) {
+        if (had)
             tape_clear(1u << k);
-            ui_say(b, " WIPED: PLAY AGAIN");
-            str_cpy(ui.msg2, "HOLD [SAVE]: UNDO", sizeof ui.msg2);
+        if (had || retake_steps) {
+            ui_say(b, " CLEARED: PLAY AGAIN");
+            str_cpy(ui.msg2, had && retake_steps ? "HOLD [SAVE] 2X: UNDO" : "HOLD [SAVE]: UNDO", sizeof ui.msg2);
         }
+        retake_steps = 0;
     }
 }

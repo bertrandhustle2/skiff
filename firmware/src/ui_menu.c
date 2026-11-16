@@ -132,7 +132,7 @@ static int32_t menu_document(int32_t y, int draw)
     uint32_t i;
     if (draw) {
         cv_text(6, y + 2, &AF_L, "OP DREAM", T_THEME);           /* (OP DREAM) this build's name; Skiff's credits stay */
-        cv_text(6, y + 38, &AF_S, "A build of Skiff 2.6, on Felucca", T_TEXT);
+        cv_text(6, y + 38, &AF_S, "Version " OPD_VERSION ", based on Skiff 2.6", T_TEXT);
         cv_text(6, y + 58, &AF_M, FELUCCA_VERSION, T_THEME);
         cv_text_r(232, y + 61, &AF_S, __DATE__, T_MID, T_BG);
         {   /* (Skiff) the core clock now, from the PLL (hal/fm1_clk.h; MENU > SYSTEM > CPU CLOCK) */

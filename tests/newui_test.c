@@ -55,7 +55,7 @@ static int test_trial2(void)
     settle();
     bad += check("EDIT on an ANALOG track: the designer's sound tried there (WAVE), its SOUND page, said how to keep it",
                  design_trk == 1u && trk[0].eng_req == ENGI_WAVE && trk[0].engine == ENGI_WAVE && cur_graph() == GR_DSND &&
-                 msg_is("TRYING IT ON T1") && !strcmp(ui.msg2, "HOLD [EDIT]: KEEP IT") && ds.c.eng == snap_e[0]);
+                 msg_is("DESIGNING FOR T1") && !strcmp(ui.msg2, "HOLD [EDIT]: SEND TO T1") && ds.c.eng == snap_e[0]);
     bad += check("the other tracks as they were", same_as_snap(1) && same_as_snap(2) && same_as_snap(5));
     memcpy(e, &trk[0].p[P_E0], sizeof e);
 #define X(k) trk[0].p[WX(k)]
@@ -228,6 +228,161 @@ static int test_trial2(void)
     return bad;
 }
 
+/* SHIFT + EDIT on the designer's pages: its sound from scratch, WAVE's first (a plain saw, nothing on it) */
+static int test_fresh(void)
+{
+    int bad = 0;
+    uint32_t ok;
+    new_layout();
+    snap();
+    press(B_EDIT);                                   /* (track 1, ANALOG: the designer's sound tried there) */
+    settle();
+    turn(EN_PRESET, 4);                              /* another of WAVE's sounds, then its knobs turned */
+    turn(EN_K4, 40);
+    press(B_EDIT);
+    turn(EN_K1, -30);
+    settle();
+    ok = design_trk == 1u && (trk[0].preset != 0u || trk[0].p[P_E1] != 127);
+    btn_down(B_HOME);
+    frame();
+    press(B_EDIT);
+    btn_up(B_HOME);
+    settle();
+    bad += check("SHIFT + EDIT there: a plain saw (INIT SAW: A alone, the filter open, no sub, noise or effects), still tried on T1",
+                 ok && design_trk == 1u && trk[0].eng_req == ENGI_WAVE && trk[0].preset == 0u && trk[0].p[P_E1] == 127 &&
+                 trk[0].p[WX(WX_ALVL)] == 127 && trk[0].p[WX(WX_BLVL)] == 0 && trk[0].p[P_E3] == 0 &&
+                 trk[0].p[WX(WX_NLVL)] == 0 && trk[0].p[P_E4] == 127 && msg_is("PLAIN SAW ON T1") && !ui.home && !ui.menu &&
+                 GR_DESIGN(cur_graph()) && same_as_snap(1));
+    hold_btn(B_EDIT, 1);
+    settle();
+    bad += check("EDIT held: T1 has the plain saw", !design_trk && trk[0].eng_req == ENGI_WAVE && trk[0].preset == 0u &&
+                 msg_is("T1 HAS THE NEW SOUND"));
+    turn(EN_K1, 3);                                  /* (its own sound now: changed in place) */
+    turn(EN_PRESET, 5);
+    settle();
+    btn_down(B_HOME);
+    frame();
+    press(B_EDIT);
+    btn_up(B_HOME);
+    settle();
+    bad += check("SHIFT + EDIT on a track's own WAVE sound: the plain saw there, said how to undo",
+                 !design_trk && trk[0].preset == 0u && trk[0].p[P_E1] == 127 && !strcmp(ui.msg2, "HOLD [SAVE]: UNDO") && !ui.menu);
+    turn(EN_PRESET, 3);                              /* HOME held until SHIFT's list is up (past the MENU's time too), */
+    settle();                                        /* then EDIT: the plain saw, and no MENU when HOME is let go */
+    btn_down(B_HOME);
+    { uint32_t k; for (k = 0; k < 70u; k++) frame(); }
+    ok = ui.shift && !ui.menu;
+    press(B_EDIT);
+    btn_up(B_HOME);
+    settle();
+    bad += check("HOME held until its list shows, then EDIT: the plain saw, the MENU stays shut, still on the designer's page",
+                 ok && !ui.menu && !ui.home && !ui.shift && trk[0].preset == 0u && trk[0].p[P_E1] == 127 &&
+                 GR_DESIGN(cur_graph()));
+    press(B_HOME);
+    frame();
+    btn_down(B_HOME);
+    frame();
+    press(B_EDIT);
+    btn_up(B_HOME);
+    settle();
+    bad += check("SHIFT + EDIT on HOME: nothing", ui.home && trk[0].preset == 0u);
+    return bad;
+}
+/* FX's list: SELECT moves down its rows before the pages beside it; a row's four knobs are that effect's own */
+static int test_fxlist(void)
+{
+    int bad = 0;
+    uint32_t ok, i;
+    int16_t d0, it0, sl0, dt0, dk0, bpm0;
+    new_layout();
+    bpm0 = song.g[G_BPM];
+    press(B_FX);
+    settle();
+    ok = cur_graph() == GR_FX && sheet_of(GR_FX) && fxl_win == 0u;
+    d0 = trk[0].p[P_DIST];
+    turn(EN_K1, 5);                                  /* its own row: DIST, CHORUS, DELAY, REVERB (the sends) */
+    turn(EN_K2, 5);
+    ok &= trk[0].p[P_DIST] > d0 && trk[0].p[P_CHOR] > 0;
+    bad += check("FX: the list first; on its own row the four knobs are the track's sends, as ever", ok);
+    it0 = trk[0].p[P_ITYPE];
+    dt0 = song.g[G_DTIME];
+    sl0 = trk[0].p[P_SLCR];
+    dk0 = trk[0].p[P_DKAMT];
+    turn(EN_SELECT, 1);                              /* DRIVE */
+    ok = cur_graph() == GR_FX && fxl_win == 1u;
+    d0 = trk[0].p[P_DTONE];
+    turn(EN_K3, 6);
+    ok &= trk[0].p[P_DTONE] != d0;
+    turn(EN_SELECT, 1);                              /* CHORUS: the send, then the song's chorus */
+    d0 = trk[0].p[P_CHOR];
+    turn(EN_K1, 7);
+    ok &= fxl_win == 2u && trk[0].p[P_CHOR] > d0;
+    d0 = song.g[G_CDEPTH];
+    turn(EN_K4, -9);
+    ok &= song.g[G_CDEPTH] < d0;
+    turn(EN_SELECT, 1);                              /* DELAY: its TIME */
+    turn(EN_K2, 2);
+    ok &= fxl_win == 3u && song.g[G_DTIME] != dt0;
+    turn(EN_SELECT, 2);                              /* INSERT: its kind */
+    turn(EN_K1, 2);
+    ok &= fxl_win == 5u && trk[0].p[P_ITYPE] != it0;
+    turn(EN_SELECT, 1);                              /* SLICER */
+    turn(EN_K1, 20);
+    ok &= fxl_win == 6u && trk[0].p[P_SLCR] != sl0;
+    turn(EN_SELECT, 1);                              /* DUCK */
+    turn(EN_K2, 20);
+    ok &= fxl_win == 7u && trk[0].p[P_DKAMT] != dk0 && cur_graph() == GR_FX;
+    bad += check("SELECT: down the list, a row at a time; each row's knobs are that effect's own (DRIVE's TONE, CHORUS's "
+                 "send and DEPTH, DELAY's TIME, INSERT's kind, SLICER, DUCK)", ok);
+    turn(EN_SELECT, 1);
+    ok = cur_graph() == GR_FX && fxl_win == 7u && song.g[G_BPM] == bpm0;
+    for (i = 0; i < 9u; i++)
+        turn(EN_SELECT, -1);
+    ok &= cur_graph() == GR_FX && fxl_win == 0u && song.g[G_BPM] == bpm0;
+    bad += check("... past its last row and its first: it stays there (SELECT is the tempo on the pages beside it), the tempo as it was", ok);
+    ui_prefs |= PREF_BPM_LOCK;                       /* MENU > BPM LOCK ON: SELECT the pages; past the last row, the next */
+    turn(EN_SELECT, 8);
+    ok = cur_graph() == GR_FXDLY;
+    turn(EN_SELECT, -1);
+    ok &= cur_graph() == GR_FX && fxl_win == 7u;
+    ui_prefs &= (uint8_t)~PREF_BPM_LOCK;
+    for (i = 0; i < 7u; i++)
+        turn(EN_SELECT, -1);
+    bad += check("BPM LOCK ON: past the last row the next page (DELAY's own), and back onto the last row", ok && fxl_win == 0u);
+    turn(EN_SELECT, 4);
+    press(B_FX);
+    settle();
+    ok = cur_graph() == GR_FXDLY;
+    bad += check("FX again from a row: the next page", ok);
+    return bad;
+}
+/* (OP DREAM 1.2) MENU > THEME on the new layout: CRYPT and NEON are not offered, LAGOON and PEBBLE are; one of the two
+ * kept from before is Skiff's default */
+static int test_themes(void)
+{
+    int bad = 0;
+    uint32_t ok = 1, i, n, seen = 0;
+    new_layout();
+    n = menu_n(MI_COLOR);
+    for (i = 0; i < n; i++) {
+        const char *nm = menu_vname(MI_COLOR, i);
+        ok &= strcmp(nm, "CRYPT") && strcmp(nm, "NEON");
+        seen |= (uint32_t)!strcmp(nm, "LAGOON") | (uint32_t)!strcmp(nm, "PEBBLE") << 1 | (uint32_t)!strcmp(nm, "QUARK") << 2 |
+                (uint32_t)!strcmp(nm, "SKIFF") << 3;
+        menu_put(MI_COLOR, i);
+        ok &= menu_get(MI_COLOR) == i && !strcmp(UI_PALETTES[settings.palette].name, nm) && !ux.crypt && !ux.neon;
+    }
+    bad += check("THEME: nine to pick (SKIFF HI-CON PAPER QUARK TAPE PEA CANDY LAGOON PEBBLE), no CRYPT, no NEON; each one "
+                 "picked is the one shown", ok && n == 9u && seen == 15u);
+    settings.palette = UI_CRYPT_INDEX;               /* (kept from Skiff) */
+    theme_apply();
+    ok = settings.palette == UI_SKIFF_INDEX && !ux.crypt;
+    settings.palette = UI_NEON_INDEX;
+    theme_apply();
+    bad += check("CRYPT or NEON stored from before: SKIFF", ok && settings.palette == UI_SKIFF_INDEX && !ux.neon);
+    menu_put(MI_COLOR, 0);
+    return bad;
+}
 static int test_keep2(void)
 {
     int bad = 0;
@@ -594,6 +749,9 @@ int main(void)
 {
     int bad = 0;
     bad += test_trial2();
+    bad += test_fresh();
+    bad += test_fxlist();
+    bad += test_themes();
     bad += test_keep2();
     bad += test_own2();
     bad += test_undo_order();

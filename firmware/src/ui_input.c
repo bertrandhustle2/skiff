@@ -2008,6 +2008,11 @@ static void select_turn(int32_t s)
     while (n-- > 0) {
         if ((sh = sheet_of(cur_page()->graph)) != 0 && sheet_rows(sh, d))
             continue;
+        if (sh && sh->eng == SHEET_ANY && !(ui_prefs & PREF_BPM_LOCK)) {   /* (FX's list, SELECT the tempo on the pages
+                                                         * beside it: its rows only, FX goes on to those pages) */
+            ui.edge_t = 24;
+            break;
+        }
         if (!page_step(d)) {
             ui.edge_t = 24;                             /* ((Skiff U4, F7) the end: the footer's n/m flashes) */
             break;
@@ -2040,6 +2045,7 @@ static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok
 static void design_tap(void);                       /* (the new layout's designer: ui_design.c, included below) */
 static void design_hold(void);
 static void design_poll(void);
+static void design_fresh(void);
 /* the quick layers: ui_layer.c (included after this file) */
 static void layer_masks(void);
 static void layer_arm(uint32_t pressed, uint32_t now);
@@ -2266,6 +2272,13 @@ static void ui_input(void)
                 design_hold();
             else if (eh == BT_TAP)
                 design_tap();
+        }
+        /* SHIFT (HOME held) + EDIT on the designer's pages: its sound from scratch, a plain saw (no HOME tap, no MENU) */
+        if (UI_NEW && ui.home_t0 && ((pressed >> panel.btn[B_EDIT]) & 1u) && !ui.menu && !ui.confirm && !name_on() &&
+            !fr.on && !ui.layer && !ui.uboot && !ui.home && GR_DESIGN(cur_page()->graph)) {
+            ui.home_t0 |= 2u;
+            home_long = 0;                              /* (HOME held long enough for SHIFT's list: no MENU after) */
+            design_fresh();
         }
         if (UI_NEW)
             design_poll();
@@ -2830,6 +2843,27 @@ timeout:
 #include "ui_fm6.c"                                     /* (FM6 LAB) EDIT > OPERATOR, ALL OPS: FM6's patch */
 #include "ui_design.c"                                  /* (the new layout) EDIT: the designer, its pages */
 
+/* (the new layout) FX's list as a sheet (ui_fxlist.c): a row's four knobs and cards are those of that effect's own
+ * page, turned and drawn the plain way (fxl_busy: the list is no sheet meanwhile); PRESETS the track's sound, as on
+ * FX's other pages */
+static void fxl_knob(uint32_t k, int32_t s)
+{
+    fxl_busy = 1;
+    page_over = fxl_row_page(fxl_row());
+    edit_param(k, s);
+    page_over = 0;
+    fxl_busy = 0;
+}
+static void fxl_cards(void)
+{
+    fxl_busy = 1;
+    page_over = fxl_row_page(fxl_row());
+    draw_columns();
+    page_over = 0;
+    fxl_busy = 0;
+}
+static void fxl_pick(int32_t s) { preset_step(s); }
+
 /* (FM6 LAB) the sheets (ui.c sheet_t): their pages' every hook (the knobs, cards, panel, header, PRESETS, SELECT,
  * SHIFT's map) goes through here */
 static const sheet_t SHEETS[] = {
@@ -2843,10 +2877,14 @@ static const sheet_t SHEETS[] = {
     {GR_DOSCB, ENGI_WAVE, 2, &ds.win[2], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
     {GR_DSUB, ENGI_WAVE, 1, &ds.win[3], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
     {GR_DFLT, ENGI_WAVE, 3, &ds.win[4], design_knob, design_cards, design_sig, design_draw, design_title, design_pick, "SOUND"},
+    {GR_FX, SHEET_ANY, FXL_ROWS, &fxl_win, fxl_knob, fxl_cards, fxl_sig, graph_fx_list, fxl_title, fxl_pick, "SOUND"},
 };
 static const sheet_t *sheet_of(uint32_t g)
 {
     uint32_t i;
+    if (g == GR_FX && (!UI_NEW || fxl_busy || layer_open()))   /* (FX's list: the new layout's; a quick layer's four are
+                                                               * the page's own sends, the plain way) */
+        return 0;
     for (i = 0; i < sizeof SHEETS / sizeof SHEETS[0]; i++)
         if (SHEETS[i].graph == g)
             return &SHEETS[i];

@@ -615,6 +615,9 @@ static const page_t PAGES[] = {
     {"FILTER", FAM_EDIT, SC_TRACK, GR_DFLT, {0xFF, 0xFF, 0xFF, 0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
+/* (the new layout's FX list, ui_fxlist.c) CHORUS's row there: how much the track sends, then the song's chorus (GLO >
+ * CHORUS's own): CHORUS has no page of its own under FX. Not one of PAGES: borrowed for its four knobs (page_desc) */
+static const page_t FXL_CHORUS = {"CHORUS", FAM_FX, SC_TRACK, GR_FX, {P_CHOR, G_CMODE, G_CRATE, G_CDEPTH}};
 /* (2.0, D 1A) the MOD page: the route KNOB 1 picks (0..10): the seven fixed routings (LFO DEST's and ENV DEST's of
  * before: the LFO to PITCH CUT SHAPE AMP, the ENV to PITCH CUT SHAPE), whose AMOUNT alone turns, then the matrix's
  * four slots (MOD_SLOT0 on), their SOURCE DEST AMOUNT */
@@ -645,7 +648,7 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = 0;
         return 0;
     }
-    if (pg->graph == GR_FXDLY || pg->graph == GR_FXREV) {   /* (2.5) FX > DELAY, REVERB: KNOB 1 the track's send, */
+    if (pg->graph == GR_FXDLY || pg->graph == GR_FXREV || pg == &FXL_CHORUS) {   /* (2.5) FX > DELAY, REVERB: KNOB 1 the track's send, */
         static const param_desc_t SEND = PD("SEND", F_PCT, 0, 127, 0);   /* named as such; 2..4 the bus's own */
         if (slot)
             return *valp = &song.g[id], &GP[id];

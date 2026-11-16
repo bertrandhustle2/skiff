@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * WAVE's own pictures (eng_wave.c), flat, one line each: an oscillator's cycle as it sounds now (the frames its POS
- * reads, through its WARP; while a note sounds, where the envelope and the LFO have moved POS), the SUB's shape, the
+ * WAVE's own pictures (eng_wave.c), flat: an oscillator's cycle as it sounds now, one whole cycle as a line with the
+ * shade between it and the middle line (the frames its POS reads, through its WARP: it changes as POS is turned, and
+ * while a note sounds, as the envelope and the LFO move POS), the SUB's shape, the
  * NOISE at its COLOUR, the filter's curve by its kind. The designer's pages draw with them (ui_design.c), and Skiff's
  * own EDIT > OSC (A's cycle). Included by ui_graph.c (after ui_pgraph.c: pg_text, pg_under, flt_level). */
 
@@ -23,39 +24,69 @@ static uint32_t wave_sig(const track_t *t)
             (uint32_t)P->ready[1] * 15601u + (uint32_t)P->live) * 2654435761u +
            (uint32_t)(wave_pos(t, P, 0) >> 7) * 7919u + (uint32_t)(wave_pos(t, P, 1) >> 7) * 104729u;
 }
-/* oscillator o's cycle over w columns from x0, h either side of the line mid, moved dx columns (THICK's copies); not
- * built yet (a light track, the table just picked): the line alone */
+/* oscillator o as it sounds now, set up for wv_osc: the frames its POS reads, through its WARP. 0: not built yet (a
+ * light track, the table just picked) */
+static int wave_now(const track_t *t, uint32_t o, wv_osc_t *O)
+{
+    const wv_part_t *P = wv_of(t);
+    uint32_t f0, L;
+    if (!P || t->engine != ENGI_WAVE || !(P->ready[o] & 7u))
+        return 0;
+    L = (P->ready[o] & 1u) ? 0u : (P->ready[o] & 2u) ? 1u : 2u;   /* the finest level that is whole */
+    (void)wv_warp_set(O, wv_kind(t->p, o), wv_amt(t->p, o));
+    if (O->kind == WK_FM)                                /* (the other oscillator's doing: not in one's own picture) */
+        O->kind = WK_OFF;
+    O->pf = wv_frame(wave_pos(t, P, o), &f0);
+    O->sh = 24u + L;
+    O->mask = (256u >> L) - 1u;
+    O->a = &P->tab[o][f0][WV_OFF[L]];
+    O->b = &P->tab[o][f0 + 1u][WV_OFF[L]];
+    return 1;
+}
+/* .. its height at column x of w (column w is column 0 again: one whole cycle, closed), h either side of mid */
+static int32_t wave_y(wv_osc_t *O, int32_t x, int32_t w, int32_t mid, int32_t h, int32_t dx)
+{
+    uint32_t step = 0xFFFFFFFFu / (uint32_t)w;
+    return mid - clamp(wv_osc(O, (uint32_t)((x - dx + 2 * w) % w) * step, 0) * h / 17000, -h, h);
+}
+/* oscillator o's cycle over w columns from x0, h either side of the line mid, moved dx columns (THICK's copies): the
+ * line. One cycle, drawn from the middle line back to it; not built yet: the middle line alone */
 static void wave_flat(const track_t *t, uint32_t o, int32_t x0, int32_t mid, int32_t w, int32_t h, uint16_t c,
                       int32_t thick, int32_t dx)
 {
-    const wv_part_t *P = wv_of(t);
     wv_osc_t O;
-    uint32_t f0, L, step = 0xFFFFFFFFu / (uint32_t)w;
     int32_t x, py = mid;
-    if (!P || t->engine != ENGI_WAVE || !(P->ready[o] & 7u)) {
+    if (!wave_now(t, o, &O)) {
         cv_rect(x0, mid, w, 1, T_LINE);
         return;
     }
-    L = (P->ready[o] & 1u) ? 0u : (P->ready[o] & 2u) ? 1u : 2u;   /* the finest level that is whole */
-    (void)wv_warp_set(&O, wv_kind(t->p, o), wv_amt(t->p, o));
-    if (O.kind == WK_FM)                                 /* (the other oscillator's doing: not in one's own picture) */
-        O.kind = WK_OFF;
-    O.pf = wv_frame(wave_pos(t, P, o), &f0);
-    O.sh = 24u + L;
-    O.mask = (256u >> L) - 1u;
-    O.a = &P->tab[o][f0][WV_OFF[L]];
-    O.b = &P->tab[o][f0 + 1u][WV_OFF[L]];
-    for (x = 0; x < w; x++) {
-        int32_t y = mid - clamp(wv_osc(&O, (uint32_t)((x - dx + 2 * w) % w) * step, 0) * h / 17000, -h, h);
+    for (x = 0; x <= w; x++) {
+        int32_t y = wave_y(&O, x, w, mid, h, dx);
         if (x)
             cv_line_t(x0 + x - 1, py, x0 + x, y, c, thick);
         py = y;
+    }
+}
+/* .. and the shade between that line and the middle one (under the line: drawn before it) */
+static void wave_shade(const track_t *t, uint32_t o, int32_t x0, int32_t mid, int32_t w, int32_t h, uint16_t fill)
+{
+    wv_osc_t O;
+    int32_t x;
+    if (!wave_now(t, o, &O))
+        return;
+    for (x = 0; x <= w; x++) {
+        int32_t y = wave_y(&O, x, w, mid, h, 0);
+        if (y < mid)
+            cv_rect(x0 + x, y, 1, mid - y, fill);
+        else if (y > mid)
+            cv_rect(x0 + x, mid + 1, 1, y - mid, fill);
     }
 }
 /* Skiff's own EDIT > OSC: A's cycle across the panel */
 static void graph_wave(const track_t *t, uint16_t c, uint32_t o)
 {
     pg_text(12, 16, N_WV_TABLE[wv_tab(t->p, o) % WV_NTAB], T_MID);
+    wave_shade(t, o, 12, 70, 216, 40, ux_mix(c, T_SURF, 75));
     cv_rect(12, 70, 216, 1, T_LINE);
     wave_flat(t, o, 12, 70, 216, 40, c, 2, 0);
 }

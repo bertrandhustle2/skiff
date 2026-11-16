@@ -101,8 +101,9 @@ static int design_begin(uint32_t k)
     if (!undo_swap(&ds.c))                                /* (said why not) */
         return 0;
     design_trk = (uint8_t)(k + 1u);
-    design_say("TRYING IT ON T", k, "");
-    str_cpy(ui.msg2, "HOLD [EDIT]: KEEP IT", sizeof ui.msg2);
+    design_say("DESIGNING FOR T", k, "");
+    str_cpy(ui.msg2, "HOLD [EDIT]: SEND TO T0", sizeof ui.msg2);   /* (23 letters: all a message holds) */
+    ui.msg2[22] = (char)('1' + k % NTRK);
     return 1;
 }
 /* the trial over, not kept: the track's own sound back, the designer's sound as it was left */
@@ -216,6 +217,22 @@ static void design_tap(void)
             ds.win[cur_page()->graph - GR_DSND] = 0;
     }
 }
+/* SHIFT + EDIT on the designer's pages: from scratch. WAVE's first sound, a plain saw with nothing on it, in place of
+ * the sound shown (the one tried on the track, or the track's own WAVE sound: one undo, SAVE held) */
+static void design_fresh(void)
+{
+    uint32_t k = song.sel % NTRK;
+    if (!design_is(TSEL))
+        return;
+    apply_preset(0);
+    memset(ds.win, 0, sizeof ds.win);
+    ds.last = 0;
+    design_say("PLAIN SAW ON T", k, "");
+    str_cpy(ui.msg2, design_trk ? "HOLD [EDIT]: SEND TO T0" : "HOLD [SAVE]: UNDO", sizeof ui.msg2);
+    if (design_trk)
+        ui.msg2[22] = (char)('1' + k);
+    ui.force = 1;
+}
 /* every pass (ui_input): a trial ends where it does not last; the designer's sound follows the WAVE track its pages
  * were on, as that track is when they are left */
 static void design_poll(void)
@@ -272,48 +289,53 @@ typedef struct {
     uint8_t hi;
 } dk_t;
 static const dk_t DK[DK_NONE] = {
-    [DK_TAB_A] = {"WAVE A", "WAVE A", "WHICH SET OF SHAPES A PLAYS", 0xFF, 0, 7},
-    [DK_TAB_B] = {"WAVE B", "WAVE B", "WHICH SET OF SHAPES B PLAYS", 0xFF, 0, 7},
-    [DK_LVL_A] = {"A LEVEL", "A LEVEL", "HOW LOUD WAVE A IS", WX(WX_ALVL), 0, 127},
-    [DK_LVL_B] = {"B LEVEL", "B LEVEL", "HOW LOUD WAVE B IS", WX(WX_BLVL), 0, 127},
-    [DK_POS_A] = {"POS", "POSITION", "WHERE IN THE SET: THE SHAPE", P_E1, 0, 127},
+    [DK_TAB_A] = {"WAVE A", "WAVE A", "WAVE A: PICKS A FAMILY OF SHAPES", 0xFF, 0, 7},
+    [DK_TAB_B] = {"WAVE B", "WAVE B", "WAVE B: PICKS A FAMILY OF SHAPES", 0xFF, 0, 7},
+    [DK_LVL_A] = {"A LEVEL", "A LEVEL", "A LEVEL: HOW LOUD WAVE A IS", WX(WX_ALVL), 0, 127},
+    [DK_LVL_B] = {"B LEVEL", "B LEVEL", "B LEVEL: HOW LOUD WAVE B IS", WX(WX_BLVL), 0, 127},
+    [DK_POS_A] = {"SHAPE", "SHAPE", "SHAPE: MORPHS THE WAVE. WATCH IT", P_E1, 0, 127},
     [DK_KIND_A] = {"WARP", "WARP", "", 0xFF, 0, WK_N - 1},
-    [DK_AMT_A] = {"AMOUNT", "WARP AMOUNT", "HOW FAR THE WARP GOES", P_E6, 0, 127},
-    [DK_OCT_A] = {"OCTAVE", "OCTAVE", "12 NOTES UP OR DOWN A STEP", 0xFF, -3, 3},
-    [DK_SEMI_A] = {"SEMI", "SEMITONES", "ONE NOTE UP OR DOWN A STEP", 0xFF, -12, 12},
-    [DK_FINE_A] = {"FINE", "FINE TUNE", "A TOUCH OFF: 100 IS ONE NOTE", 0xFF, -63, 63},
-    [DK_THICK_A] = {"THICK", "THICK", "2 COPIES A LITTLE OFF: FATTER", WX(WX_ATHICK), 0, 127},
-    [DK_POS_B] = {"POS", "POSITION", "WHERE IN THE SET: THE SHAPE", P_E2, 0, 127},
+    [DK_AMT_A] = {"AMOUNT", "WARP AMOUNT", "AMOUNT: HOW STRONG THE WARP IS", P_E6, 0, 127},
+    [DK_OCT_A] = {"OCTAVE", "OCTAVE", "OCTAVE: 12 KEYS UP OR DOWN", 0xFF, -3, 3},
+    [DK_SEMI_A] = {"SEMI", "SEMITONES", "SEMI: ONE KEY UP OR DOWN", 0xFF, -12, 12},
+    [DK_FINE_A] = {"FINE", "FINE TUNE", "FINE: SLIGHTLY SHARP OR FLAT", 0xFF, -63, 63},
+    [DK_THICK_A] = {"THICK", "THICK", "THICK: EXTRA COPIES, A FAT SOUND", WX(WX_ATHICK), 0, 127},
+    [DK_POS_B] = {"SHAPE", "SHAPE", "SHAPE: MORPHS THE WAVE. WATCH IT", P_E2, 0, 127},
     [DK_KIND_B] = {"WARP", "WARP", "", 0xFF, 0, WK_N - 1},
-    [DK_AMT_B] = {"AMOUNT", "WARP AMOUNT", "HOW FAR THE WARP GOES", WX(WX_BAMT), 0, 127},
-    [DK_OCT_B] = {"OCTAVE", "OCTAVE", "12 NOTES UP OR DOWN A STEP", 0xFF, -3, 3},
-    [DK_SEMI_B] = {"SEMI", "SEMITONES", "ONE NOTE UP OR DOWN A STEP", 0xFF, -12, 12},
-    [DK_FINE_B] = {"FINE", "FINE TUNE", "A TOUCH OFF: 100 IS ONE NOTE", 0xFF, -63, 63},
-    [DK_THICK_B] = {"THICK", "THICK", "2 COPIES A LITTLE OFF: FATTER", WX(WX_BTHICK), 0, 127},
-    [DK_SUB] = {"SUB", "SUB", "A LOW NOTE UNDER THE SOUND", P_E3, 0, 127},
-    [DK_SUBK] = {"SHAPE", "SUB SHAPE", "THE LOW NOTE'S OWN SHAPE", WX(WX_SUBK), 0, WS_N - 1},
-    [DK_NOISE] = {"NOISE", "NOISE", "HISS MIXED IN", WX(WX_NLVL), 0, 127},
-    [DK_NCOL] = {"COLOUR", "NOISE COLOUR", "THE HISS: A RUMBLE .. BRIGHT", WX(WX_NCOL), 0, 127},
-    [DK_CUT] = {"CUTOFF", "CUTOFF", "WHERE THE FILTER CUTS", P_E4, 0, 127},
-    [DK_RES] = {"RES", "RESONANCE", "A WHISTLE AT THE CUTOFF", P_E5, 0, 127},
-    [DK_DRIVE] = {"DRIVE", "DRIVE", "PUSHED INTO GRIT", P_E7, 0, 127},
+    [DK_AMT_B] = {"AMOUNT", "WARP AMOUNT", "AMOUNT: HOW STRONG THE WARP IS", WX(WX_BAMT), 0, 127},
+    [DK_OCT_B] = {"OCTAVE", "OCTAVE", "OCTAVE: 12 KEYS UP OR DOWN", 0xFF, -3, 3},
+    [DK_SEMI_B] = {"SEMI", "SEMITONES", "SEMI: ONE KEY UP OR DOWN", 0xFF, -12, 12},
+    [DK_FINE_B] = {"FINE", "FINE TUNE", "FINE: SLIGHTLY SHARP OR FLAT", 0xFF, -63, 63},
+    [DK_THICK_B] = {"THICK", "THICK", "THICK: EXTRA COPIES, A FAT SOUND", WX(WX_BTHICK), 0, 127},
+    [DK_SUB] = {"SUB", "SUB", "SUB: A LOW NOTE UNDER THE SOUND", P_E3, 0, 127},
+    [DK_SUBK] = {"SHAPE", "SUB SHAPE", "SHAPE: THE LOW NOTE'S OWN WAVE", WX(WX_SUBK), 0, WS_N - 1},
+    [DK_NOISE] = {"NOISE", "NOISE", "NOISE: HISS MIXED INTO THE SOUND", WX(WX_NLVL), 0, 127},
+    [DK_NCOL] = {"COLOUR", "NOISE COLOUR", "COLOUR: RUMBLE TO BRIGHT HISS", WX(WX_NCOL), 0, 127},
+    [DK_CUT] = {"CUTOFF", "CUTOFF", "CUTOFF: WHERE THE FILTER CUTS", P_E4, 0, 127},
+    [DK_RES] = {"RES", "RESONANCE", "RES: A WHISTLE AT THE CUTOFF", P_E5, 0, 127},
+    [DK_DRIVE] = {"DRIVE", "DRIVE", "DRIVE: PUSHES THE SOUND INTO GRIT", P_E7, 0, 127},
     [DK_FKIND] = {"KIND", "FILTER KIND", "", 0xFF, 0, WF_N - 1},
-    [DK_THRU_A] = {"WAVE A", "WAVE A", "ON: THROUGH THE FILTER", 0xFF, 0, 1},
-    [DK_THRU_B] = {"WAVE B", "WAVE B", "ON: THROUGH THE FILTER", 0xFF, 0, 1},
-    [DK_THRU_N] = {"NOISE", "NOISE", "ON: THROUGH THE FILTER", 0xFF, 0, 1},
-    [DK_THRU_S] = {"SUB", "SUB", "ON: THROUGH THE FILTER", 0xFF, 0, 1},
-    [DK_ENV] = {"ENV AMT", "ENVELOPE AMOUNT", "EACH NOTE OPENS THE FILTER", P_ED_FLT, -64, 63},
-    [DK_KTRK] = {"KEY TRK", "KEY TRACK", "HIGH NOTES: A HIGHER CUTOFF", WX(WX_KTRK), 0, 127},
+    [DK_THRU_A] = {"WAVE A", "WAVE A", "WAVE A: ON = THROUGH THE FILTER", 0xFF, 0, 1},
+    [DK_THRU_B] = {"WAVE B", "WAVE B", "WAVE B: ON = THROUGH THE FILTER", 0xFF, 0, 1},
+    [DK_THRU_N] = {"NOISE", "NOISE", "NOISE: ON = THROUGH THE FILTER", 0xFF, 0, 1},
+    [DK_THRU_S] = {"SUB", "SUB", "SUB: ON = THROUGH THE FILTER", 0xFF, 0, 1},
+    [DK_ENV] = {"ENV AMT", "ENVELOPE AMOUNT", "ENV AMT: EACH NOTE OPENS IT UP", P_ED_FLT, -64, 63},
+    [DK_KTRK] = {"KEY TRK", "KEY TRACK", "KEY TRK: HIGH KEYS OPEN IT MORE", WX(WX_KTRK), 0, 127},
 };
 static const char *const DK_WARP_HINT[WK_N] = {
-    "THE SHAPE AS IT IS", "PLAYED FASTER: A HARD EDGE", "SQUEEZED TOWARD ITS START", "SQUEEZED TOWARD ITS END",
-    "SQUEEZED, THEN SILENCE: THIN", "SHAKEN BY THE OTHER WAVE"};
+    "WARP OFF: THE SHAPE AS IT IS", "SYNC: A HARD, BUZZY EDGE", "BEND+: SQUEEZED TOWARD THE FRONT",
+    "BEND-: SQUEEZED TOWARD THE BACK", "PWM: SQUEEZED THIN, THEN SILENCE", "FM: SHAKEN BY THE OTHER WAVE"};
 static const char *const DK_FLT_HINT[WF_N] = {
-    "CUTS THE HIGHS, GENTLY", "CUTS THE HIGHS, HARD", "KEEPS AROUND THE CUTOFF", "CUTS THE LOWS", "CUTS A SLICE OUT"};
+    "LOW 12: CUTS THE HIGHS, GENTLY", "LOW 24: CUTS THE HIGHS, HARD", "BAND: KEEPS ONLY THE MIDDLE",
+    "HIGH: CUTS THE LOWS", "NOTCH: CUTS A NARROW SLICE OUT"};
+/* a screen's title (the strip's first line, always there) and, until a knob is turned, what the screen is for */
+static const char *const DK_PAGE_TITLE[NELEM(DWIN)] = {
+    "WAVEFORM EDITOR", "OSCILLATOR A: SHAPE", "OSCILLATOR A: PITCH", "OSCILLATOR B: SHAPE", "OSCILLATOR B: PITCH",
+    "SUB AND NOISE", "FILTER", "FILTER: WHAT GOES IN", "FILTER: MOVEMENT"};
 static const char *const DK_PAGE_HINT[NELEM(DWIN)] = {
-    "PICK THE TWO WAVES, HOW LOUD", "THE WAVE AS YOU HEAR IT", "ITS PITCH BESIDE THE NOTE", "THE WAVE AS YOU HEAR IT",
-    "ITS PITCH BESIDE THE NOTE", "A LOW NOTE AND HISS UNDER IT", "TAKES PART OF THE SOUND AWAY",
-    "WHAT GOES THROUGH THE FILTER", "WHAT MOVES THE CUTOFF"};
+    "HOME + EDIT: START FROM A SAW", "TURN SHAPE TO MORPH THE WAVE", "TUNES THIS WAVE AGAINST THE KEYS",
+    "TURN SHAPE TO MORPH THE WAVE", "TUNES THIS WAVE AGAINST THE KEYS", "A LOW NOTE AND HISS UNDERNEATH",
+    "REMOVES PART OF THE SOUND", "ON: THAT PART PASSES THE FILTER", "WHAT MOVES THE CUTOFF BY ITSELF"};
 
 static uint32_t design_row(void)                          /* the page's row of knobs shown: its place in DWIN */
 {
@@ -417,18 +439,19 @@ static const char *design_title(void)
     uint32_t g = cur_page()->graph;
     return T[GR_DESIGN(g) ? g - GR_DSND : 0u];
 }
-/* the strip where the cards are: the knob turned last, its name and value, and what it does; none yet: the page's */
+/* the strip where the cards are: the screen's title, always; right of it the value of the knob turned last (none
+ * yet: which of the page's rows of knobs this is); under it what that knob does in plain words (none yet: what the
+ * screen is for) */
 static void design_cards(void)
 {
     const int16_t *p = TSEL->p;
     int32_t hot = design_hot();
     uint32_t r = design_row(), c = hot >= 0 ? DWIN[r][hot] : DK_NONE, h, i, nw;
     char val[16] = "";
-    const char *unit = "", *a = design_title(), *b = DK_PAGE_HINT[r];
+    const char *unit = "", *a = DK_PAGE_TITLE[r], *b = DK_PAGE_HINT[r];
     if (c != DK_NONE) {
         int32_t v = dk_get(p, c);
         dk_text(c, v, val, &unit);
-        a = DK[c].name;
         b = c == DK_KIND_A || c == DK_KIND_B ? DK_WARP_HINT[(uint32_t)v % WK_N] : c == DK_FKIND ? DK_FLT_HINT[(uint32_t)v % WF_N]
                                                                                                 : DK[c].hint;
     }
@@ -441,20 +464,20 @@ static void design_cards(void)
     cv_begin(234, CARD_H, T_BG);
     cv_rrect(0, 0, 234, CARD_H, 5, T_SURF, T_BG);
     cv_bg = T_SURF;
-    cv_text_fit(8, 3, &AF_M, a, c != DK_NONE ? T_ACCENT : T_TEXT, T_SURF, 150);
     if (val[0]) {
-        int32_t x = cv_text_r(226 - (unit[0] ? text_w(&AF_S, unit) + 3 : 0), 3, &AF_M, val, T_TEXT, T_SURF);
-        (void)x;
+        int32_t x = cv_text_r(226 - (unit[0] ? text_w(&AF_S, unit) + 3 : 0), 3, &AF_M, val, T_ACCENT, T_SURF);
         if (unit[0])
             cv_text_r(226, 3 + AF_M.asc - AF_S.asc, &AF_S, unit, T_MID, T_SURF);
+        cv_text_fit(8, 3, &AF_M, a, T_TEXT, T_SURF, x - 8 - 14);
     } else {                                              /* (no knob yet: which of the page's rows of knobs this is) */
         static const uint8_t NW[5] = {1, 2, 2, 1, 3};
         uint32_t g = cur_page()->graph - GR_DSND;
         nw = NW[g % 5u];
         for (i = 0; i < nw && nw > 1u; i++)
             cv_rrect(226 - (int32_t)(nw - i) * 9, 9, 6, 6, 3, i == ds.win[g % 5u] % nw ? T_TEXT : T_LINE, T_SURF);
+        cv_text_fit(8, 3, &AF_M, a, T_TEXT, T_SURF, 180);
     }
-    cv_text_fit(8, 23, &AF_S, b, T_MID, T_SURF, 218);
+    cv_text_fit(8, 23, &AF_S, b, c != DK_NONE ? T_ACCENT : T_MID, T_SURF, 218);
     cv_blit(3, Y_LABEL);
 }
 /* what the strip and the panel show besides the track's values (ui_graph.c graph_signature hashes those) */
@@ -544,6 +567,8 @@ static void design_draw(const track_t *t, uint16_t c)
             int32_t x = o ? 124 : 10, lv = wv_x(p, WX_ALVL + o);
             str_cpy(nm, o ? "B  " : "A  ", sizeof nm);
             str_cpy(nm + 3, N_WV_TABLE[wv_tab(p, o) % WV_NTAB], sizeof nm - 3u);
+            if (lv)
+                wave_shade(t, o, x, DS_MID, 106, 15 + lv * 12 / 127, ux_mix(o ? T_ACCENT : c, T_SURF, 75));
             design_box(x, 106, nm, lv ? T_TEXT : T_DIM);
             wave_flat(t, o, x, DS_MID, 106, 15 + lv * 12 / 127, lv ? (o ? T_ACCENT : c) : T_DIM, 2, 0);
         }
@@ -552,6 +577,7 @@ static void design_draw(const track_t *t, uint16_t c)
     case GR_DOSCB: {
         int32_t th = wv_x(p, WX_ATHICK + o), d = 2 + th * 6 / 127;
         str_cpy(nm, N_WV_TABLE[wv_tab(p, o) % WV_NTAB], sizeof nm);
+        wave_shade(t, o, 10, DS_MID, 220, DS_H, ux_mix(o ? T_ACCENT : c, T_SURF, 75));
         design_box(10, 220, nm, T_MID);
         if (r == DROW0[g - GR_DSND] + 1u) {               /* the pitch row: THICK's copies beside it, the pitch in words */
             char b[24];
