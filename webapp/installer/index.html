@@ -29,8 +29,8 @@
 <body>
 <main>
   <button class="lang" id="lang"></button>
-  <h1>OP dream, version 1.2.1</h1>
-  <p class="small">A personal, modified build of Skiff 2.6 for the M-VAVE FM-1: a tape on HOME, a sound designer on EDIT. Build 5, the one before this, runs on a real FM-1. Version 1.2.1 has passed its tests and simulated installs; it has not run on a real FM-1 yet. To go back: <a href="../installer-build5/" style="color:inherit">the build 5 page</a>. For Skiff itself, use <a href="https://illuminus5.github.io/skiff/webapp/installer/" style="color:inherit">Skiff's own installer</a>.</p>
+  <h1>OP dream, version 1.2.3</h1>
+  <p class="small">A personal, modified build of Skiff 2.6 for the M-VAVE FM-1: a tape on HOME, a sound designer on EDIT. Build 5, the one before this, runs on a real FM-1. Version 1.2.3 has passed its tests and simulated installs; it has not run on a real FM-1 yet. To go back: <a href="../installer-build5/" style="color:inherit">the build 5 page</a>. For Skiff itself, use <a href="https://illuminus5.github.io/skiff/webapp/installer/" style="color:inherit">Skiff's own installer</a>.</p>
   <p data-t="intro"></p>
   <p data-t="warn"></p>
   <p class="small" data-t="direct"></p>
@@ -1097,7 +1097,7 @@ applyLang();
 const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textContent = t(k) + arg; };
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
-const meta = {"version": "2.6-dream13", "product": "FM-1_726", "pkg": "../../firmware/skiff-2.6-dream13.fwsc", "packages": [{"product": "FM-1_726", "pkg": "../../firmware/skiff-2.6-dream13.fwsc"}]};
+const meta = {"version": "2.6", "opd": "1.2.3", "product": "FM-1_67310203", "pkg": "../../firmware/opdream-1.2.3.fwsc", "packages": [{"product": "FM-1_67310203", "pkg": "../../firmware/opdream-1.2.3.fwsc"}]};   // (version: the Skiff it is based on, which the backup step below goes by)
 // one package per model ({ product, pkg }); a site made before the SMK builds carries only product + pkg
 const packages = meta.packages || [{ product: meta.product, pkg: meta.pkg }];
 const images = new Map();             // product -> logical image, loaded on first use
@@ -1107,7 +1107,7 @@ const lockInstaller = (on) => { writing = on; $("go").disabled = on || !navigato
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
 if (!navigator.requestMIDIAccess) sayK("nomidi");
-else { say(`OP dream, version 1.2.1 (Skiff ${meta.version})`); $("go").disabled = false; }
+else { say(`OP dream, version ${meta.opd} (Skiff ${meta.version})`); $("go").disabled = false; }
 
 async function imageFor(entry) {
   if (images.has(entry.product)) return images.get(entry.product);
