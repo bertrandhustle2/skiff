@@ -1281,7 +1281,9 @@ static void draw_columns(void)
  * ABOUT (ui_menu.c), as ever */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-#define OPD_VERSION "1.2.2"
+#ifndef OPD_VERSION                    /* (build.py --release X.Y.Z passes it) */
+#define OPD_VERSION "1.2.3"
+#endif
 static const char *const SPLASH_LINES[] = {"OP DREAM", "version " OPD_VERSION, "based on Skiff"};
 /* the canvas twice as large, in place: from its last pixel back (a pixel's four land at or past where it was) */
 static void cv_double(void)

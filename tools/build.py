@@ -67,7 +67,21 @@ BOARD = "fm1"                       # fm1 (default) or smk37: BOARD env or --boa
 BOARD_PRODUCT = {"fm1": "FM-1_700", "smk37": "SMK-37 Pro_700"}   # a dev build's identity
 BOARD_PREFIX = {"fm1": "FM-1_7", "smk37": "SMK-37 Pro_7"}        # a release build's: prefix + X + Y
 BOARD_DEFS = {"fm1": [], "smk37": ["-DBOARD_SMK37=1"]}           # the FM-1 build gets no new flag (byte-identical)
-BOARD_STEM = {"fm1": "skiff", "smk37": "skiff-smk37"}            # a release package: STEM-X.Y.fwsc
+BOARD_STEM = {"fm1": "opdream", "smk37": "skiff-smk37"}          # a release package: STEM-X.Y.fwsc
+# (OP DREAM) the FM-1 release is OP DREAM's: its own identity (The Firmware Hub lists a firmware by a number no other
+# one uses; Skiff's are FM-1_71x and FM-1_72x), this prefix and then its version X.Y.Z as XYYZZ: 1.2.3 is
+# FM-1_67310203. FELUCCA_VERSION stays the Skiff it is based on (the menu, the console, Skiff's Editor); OP DREAM's
+# own version goes to the start-up screen and ABOUT (ui_draw.c OPD_VERSION).
+OPD_PREFIX = "FM-1_673"
+OPD = None                          # OPD_VERSION of a release build
+
+
+def opd_identity(release):
+    """OP DREAM's identity for its version X.Y.Z (or X.Y.Z-suffix): the prefix and XYYZZ; None for another form"""
+    m = re.fullmatch(r"(\d)\.(\d{1,2})\.(\d{1,2})(-[A-Za-z0-9]+)?", release)
+    return OPD_PREFIX + m[1] + m[2].zfill(2) + m[3].zfill(2) if m else None
+
+
 # smk37: the keyboard's model name (MODEL env or --model); one hardware, three names. pro adds no flag
 MODELS = {"pro": "SMK-37 Pro", "elite": "SMK-37 Elite", "mke": "MKE-P37"}
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/felucca.c)
@@ -230,6 +244,8 @@ def build_app():
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')
+    if OPD:
+        flags.append(f'-DOPD_VERSION="{OPD}"')
     # felucca.c goes to LLVM IR without the optimizer, the main-loop functions (UI, stores, editor) are
     # marked minsize (tools/size_fns.py), then the IR is compiled at -Os. FELUCCA_SIZE=0: -Os everywhere
     size = os.environ.get("FELUCCA_SIZE") != "0"
@@ -374,7 +390,7 @@ def mmio_check():
 
 
 def main():
-    global PRODUCT, VERSION, BOARD, APP_SLOT
+    global PRODUCT, VERSION, BOARD, APP_SLOT, OPD
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_7XY, version string vX.Y")
     ap.add_argument("--board", choices=sorted(BOARD_PRODUCT), default=None,
@@ -400,7 +416,14 @@ def main():
         BOARD_PREFIX[BOARD] = BOARD_PREFIX[BOARD].replace(MODELS["pro"], MODELS[model])
         stem += "-" + model
         name = f"{stem}.fwsc"
-    if a.release:                   # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
+    if a.release and BOARD == "fm1":            # (OP DREAM) X.Y.Z, or X.Y.Z-suffix: see OPD_PREFIX
+        PRODUCT = opd_identity(a.release)
+        if not PRODUCT:
+            raise SystemExit(f"--release {a.release}: use X.Y.Z or X.Y.Z-suffix (OP DREAM's version)")
+        OPD = a.release.lower()
+        os.environ.setdefault("FELUCCA_CDC", "0")   # (Skiff 2.0) no serial console in a release (see the top)
+        name = f"{stem}-{a.release}.fwsc"
+    elif a.release:                 # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
         m = re.fullmatch(r"(\d)\.(\d)(?:\.\d){0,2}(-[A-Za-z0-9]+)?", a.release)
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z, X.Y.Z.W or X.Y-suffix, one digit each")

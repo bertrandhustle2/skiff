@@ -1,0 +1,10 @@
+{
+  "what": "An OP-1-style workflow for the FM-1: play, record and layer full songs on 6 tracks in real time, with no quantizing, plus a step sequencer. EDIT opens a Vital-style two-wave synth: design a sound, then send it to a track. Simple project and sound saving, on-screen tips. Based on Skiff.",
+  "author": "James",
+  "kinds": [
+    "groove"
+  ],
+  "image": "docs/hub-card.png",
+  "color": "#22C3B4",
+  "sounds": "CC0: instrument samples from Versilian Studios' VSCO-2 Community Edition and VCSL (assets/samples-cc0, ATTRIBUTION.txt there); drums synthesized by Felucca's tools/gen_waves.py (Hügelton Sample Pack, GPL-3.0-only); assets/breaks are Skiff's SLICE loops (GPL-3.0-only), in the repository only: the FM-1 package leaves SLICE out. All kept from Skiff 2.6."
+}

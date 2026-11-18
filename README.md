@@ -1,3 +1,60 @@
+# OP dream
+
+A firmware for the M-VAVE FM-1: an OP-1-style way of working, built on
+[Skiff 2.6](https://github.com/illuminus5/skiff) by illuminus5, which is built on
+[Felucca](https://github.com/hugelton/Felucca) by Hügelton Instruments.
+
+<p><img src="docs/hub-card.png" alt="OP dream's HOME screen: the tape, six tracks" width="240"></p>
+
+**Install:** open <https://bertrandhustle2.github.io/skiff/webapp/installer/> in Chrome or Edge on a computer, plug
+the FM-1 in with a USB data cable and press Install. Installing firmware is at your own risk.
+
+## What it adds to Skiff
+
+- **A tape on HOME.** Play, and what you play is kept as you played it: the timing, the chords, how long each note
+  was held. No steps and no length to set first. Six tracks, one after the other or on top of each other; hold PLAY
+  to loop. Hold REC to clear the selected track (its tape and its step notes), hold SAVE to take that back.
+- **A sound designer on EDIT.** Two waves, each picked from a family of shapes and morphed with one knob, with a sub,
+  noise and a filter; every screen says in plain words what the knob you turned does. Hold EDIT to send the sound to
+  the track you came from; HOME + EDIT starts again from a plain saw.
+- **SAVE as three pages**: the whole project, one sound, the list of sounds.
+- **FX opens on a list** of the track's effects; turn the SELECT knob to pick one and its settings are on the four
+  knobs.
+- **Themes**: TAPE, PEA, CANDY, LAGOON and PEBBLE are new; Skiff's CRYPT and NEON are not offered.
+
+SEQ is still Skiff's step sequencer, and the sounds, effects, arp and song are Skiff's.
+
+## What it leaves out, and what changes for a unit coming from Skiff
+
+- To make room, the FM-1 build has no SLICE sound type, and none of the pages only Skiff's own layout reaches (TAKES
+  and FREE TAKES, the EDIT layer, the USER, PROJECT and TAPE pages).
+- The tapes are kept where Skiff keeps its third user sample set (USR3). OP dream has two user sample slots, USR1 and
+  USR2; a set in USR3 is not offered, and is written over when a tape is saved.
+- Projects use Skiff 2.6's format and place. Loading projects saved by Skiff has not been tried on a real unit.
+- Skiff's Editor does not know the designer's sound type (WAVE) or the added themes.
+
+## Leaving it
+
+OP dream carries Felucca's update loader, as Skiff does: any FM-1 installer can put another firmware over it. Hold
+OCT− and OCT+ for five seconds for the update mode.
+
+## Building
+
+A tag `vX.Y.Z` builds the package on GitHub with The Firmware Hub's shared workflow
+([fm1-build](https://github.com/zvenson/fm1-build)) and attaches `opdream-X.Y.Z.fwsc` to the release. By hand:
+`./build.sh --release X.Y.Z` (see `BUILDING.md`). The package's identity is `FM-1_673` and the version as XYYZZ:
+1.2.3 is `FM-1_67310203`.
+
+## Licence and credits
+
+GPL-3.0-only, as Skiff and Felucca (`LICENSE`); everything else it carries is listed in `LICENSING.md`. OP dream is
+James's design; its changes to Skiff were written with Claude, Anthropic's AI, and are marked (TAPE), (OP DREAM) or
+(the new layout) in the sources.
+
+What follows is Skiff's own readme, for everything OP dream takes from it.
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo/skiff-logo.svg">
