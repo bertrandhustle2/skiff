@@ -6,5 +6,5 @@
   ],
   "image": "docs/hub-card.png",
   "color": "#22C3B4",
-  "sounds": "CC0: instrument samples from Versilian Studios' VSCO-2 Community Edition and VCSL (assets/samples-cc0, ATTRIBUTION.txt there); drums synthesized by Felucca's tools/gen_waves.py (Hügelton Sample Pack, GPL-3.0-only); assets/breaks are Skiff's SLICE loops (GPL-3.0-only), in the repository only: the FM-1 package leaves SLICE out. All kept from Skiff 2.6."
+  "sounds": "CC0: instrument samples from Versilian Studios VSCO-2 Community Edition and VCSL; drums synthesized by Felucca's own generator (Hügelton Sample Pack, GPL-3.0-only); Skiff's SLICE drum loops (GPL-3.0-only) are in the repository only, not in the FM-1 package. All kept from Skiff."
 }
